@@ -6,7 +6,7 @@
 > **Industry:** {{INDUSTRY}}
 > **As of:** {{YYYY-MM-DD}}
 > **Status:** {{active|paused|archived}}
-> **Operator:** {{OPERATOR_NAME}}
+> **Operator:** Assaf Kipnis / the investigation practice
 
 ---
 

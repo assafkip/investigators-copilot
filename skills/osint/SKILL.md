@@ -42,6 +42,21 @@ All API keys via environment variables. Never hardcode tokens.
 - `BRIGHTDATA_MCP_URL` — Bright Data MCP endpoint (full URL with token)
 - `MCPORTER_CONFIG` — mcporter config path
 
+Enrichment adapters (`scripts/osint-tool.py`, all optional; keyless paths work without them).
+`python3 scripts/osint-tool.py --list` shows what each adapter is missing.
+- Infra / reputation: `SHODAN_API_KEY` (else keyless InternetDB), `URLSCAN_API_KEY`, `OTX_API_KEY`, `GREYNOISE_API_KEY`, `ABUSEIPDB_API_KEY`, `VT_API_KEY` (ioc-reputation.py), `CERTSPOTTER_API_KEY`
+- Records / sanctions: `OPENCORPORATES_API_KEY`, `OPENSANCTIONS_API_KEY` or `YENTE_URL` (local yente), `COURTLISTENER_API_TOKEN`
+- Crypto: `ETHERSCAN_API_KEY`, `TRONGRID_API_KEY`
+- Identity: `GITHUB_TOKEN`, `GITLAB_TOKEN`, `API_ID` + `API_HASH` + `PHONE_NUMBER` (+ `TELEGRAM_SESSION_DIR`) for telegram_phone; `OSINT_USERNAME_WORKERS`, `OSINT_USERNAME_SITE_TIMEOUT`
+- /q-corp (`install-pp.sh`): `COMPANY_PP_CONTACT_EMAIL`, `COMPANIES_HOUSE_API_KEY`, `FEC_API_KEY_QUERY_AUTH`, `LDA_API_KEY`
+- Images: `GOOGLE_VISION_API_KEY` (reverse-image.sh, /q-face Vision backend), `SEARCH4FACES_API_KEY`, `FACECHECK_API_KEY`, `SHADOWFINDER_CACHE`
+- Intake NER: `GLINER_MODEL`; `LANGEXTRACT_API_KEY` or `GEMINI_API_KEY` + `LANGEXTRACT_MODEL` (langextract SENDS TEXT TO GEMINI -- not for client documents without approval)
+- Services (`tools/docker-compose.yml`): `CRAWL4AI_URL` (default http://localhost:11235), `CRAWL4AI_API_TOKEN`, `CRAWL_MIN_CHARS`, `CHANGEDETECTION_URL` + `CHANGEDETECTION_API_KEY`, `ARCHIVEBOX_URL` + `ARCHIVEBOX_API_KEY`, `SPIDERFOOT_URL`, `AUTO_ARCHIVER_CONFIG`, `SOCIAL_TIMEOUT_SEC`
+- Endpoint overrides: `OSINT_DOH_URL`, `OSINT_ETH_RPC_URL`, `OSINT_SOLANA_RPC_URL`, `OSINT_ENS_RESOLVER`, `OSINT_BLOCKSCOUT_URL`, `OSINT_CACHE_DIR`, `PD_HTTPX_BIN`
+- Telegram harvest: `TGSPYDER_SRC`. Opt-in hooks: `Q_SCOPE_HOOK`, `Q_SCOPE_EXTRA`, `Q_BUDGET_HOOK`, `Q_BUDGET_FILE`, `Q_WORKSPACE` (see `scripts/hooks/README.md`)
+
+Install optional tools: `bash scripts/setup-tools.sh --list` (then `--only <name>`, `--all`, `--docker <svc>`).
+
 ## Scripts
 
 Run from skill dir: `bash scripts/<name>.sh`.
@@ -70,6 +85,46 @@ Each script validates env vars, exits with descriptive error + URL to get the ke
 - `parallel.sh` — `search <query>` | `extract <url>`
 - `brightdata.sh` — `scrape <url>` | `scrape-batch` | `search` | `search-geo <cc>` | `search-yandex`
 
+**Setup & diagnostics:**
+- `diagnose.sh` -- keys, binaries, capabilities, and the `osint-tool.py` adapter summary (ready/missing/import errors).
+- `setup-tools.sh` -- `--list` | `--only <name>[,<name>]` | `--all` | `--docker <svc>[,<svc>]` [`--dry-run`]. pipx/pip/go/cargo installs; system packages are printed, never sudo'd.
+- `dead-hooks-lint.py` -- flags hooks in settings files whose script is missing.
+- `mcp-client.py <mcp_url> --list-tools` -- list an MCP server's tools.
+
+**Enrichment (adapters, every result carries its tier):**
+- `osint-tool.py --list` | `osint-tool.py <slug> <query> [--mode M] [--json] [--case <case>|--save]` -- 54 adapters (infra, records, sanctions, crypto, identity, reputation). Table: `references/tools.md` "Enrichment adapters". Same adapters via MCP `osint-infra` tools `enrich` / `enrich_providers`.
+- `identity-sweep.py <handle|email|phone> [--case <case>] [--only a,b] [--skip a,b]` -- every ready identity adapter on one value, merged, T3. Shortcut: `identity-lookup.sh sweep <value> [case]`.
+- `identity-lookup.sh keybase|github|mastodon|leakcheck <query>` -- keyless single lookups.
+- `reddit-arctic.py user|sub|thread <x> [--case <case>]` -- Reddit history: Arctic Shift, then PullPush, then RSS (reddit.com JSON 403s from servers).
+- `install-pp.sh list|install|run <name> --case C -- <args>` -- printing-press public-records CLIs (SEC EDGAR, Form D, Companies House, FEC, LDA, FAA, EU tenders) for `/q-corp`.
+- `ioc-reputation.py extracted/<doc>/iocs.json [--sources ...] [--out rep.csv]` -- reputation leads for extracted indicators (T3; exposes indicators to providers).
+
+**Crawl, archive, watch:**
+- `crawl.sh fetch <url> [--case C]` | `crawl.sh map <url> [--depth N]` -- crawl4ai, then Scrapling; fail-closed on empty/challenge pages. `map` uses katana.
+- `capture-evidence.sh ... [--social] [--archivebox]` -- additive media download (yt-dlp / gallery-dl / auto-archiver) and ArchiveBox copy; never flips an item's status, never edits source.json.
+- `watch.py add|list|poll|remove` -- page monitoring (local diff or changedetection.io) for `/q-watch`.
+
+**Images & geo:**
+- `reverse-image.sh <image|url> [--case C]` -- Google Vision web detection (`GOOGLE_VISION_API_KEY`).
+- `shadowfinder.sh find|sun ... [--case C]` -- bellingcat ShadowFinder shadow-length geolocation.
+- `face-search.py` -- `/q-face` pipeline (founder approval required; hits are T3).
+
+**Intake, analysis, exports:**
+- `extract-intake.py --case <case> [--ner gliner|langextract|spacy]` -- also writes `iocs.json`, `entities.json`, `exif.json` side files (T3 leads).
+- `resolve-entities.py <csv/json ...> --out same_as.csv [--ftm out.jsonl]` -- entity resolution (splink or fallback).
+- `validate-citations.py <report.md> --case <case>` -- link liveness (HEAD/GET) plus a check that the citing sentence's hard tokens appear in the captured EV item.
+- `export-intel.py stix|misp|csv|all --case <case> [--tlp ...]` -- threat-intel exports.
+- `render-timeline.py --case <case> [--timesketch]` -- HTML timeline (or Timesketch CSV).
+- `render-map.py --case <case> [--csv FILE]` -- map of geotagged evidence.
+- `redact-pii.py <file.md> [--engine auto|presidio|regex]` -- writes a redacted copy for `/q-export --redact`.
+- `render-report.py`, `resolve-deliverable.py`, `findings-verify-hook.py` -- report rendering and pre-delivery checks (see `.claude/rules/`).
+
+**Related skills (siblings of this one under `skills/`):**
+- `geo-sleuth/` -- geolocate / chronolocate a photo, outputs routed into EV-NNNN items.
+- `verification/` -- SIFT, C2PA provenance (`c2patool`), account authenticity, coordinated-behavior checks.
+- `telegram-harvest/` -- no-LLM Telegram channel harvest to XLSX (`setup.sh` once, then `scripts/harvest.py`).
+- `leak-record-classifier/`, `structured-analysis/` -- unchanged.
+
 ## Research Escalation Flow
 
 **Принцип: от дешёвого к дорогому, от быстрого к глубокому.**
@@ -93,6 +148,29 @@ bash skills/osint/scripts/exa.sh people "<Name>"
 ```
 → Получаешь: быстрые факты, ссылки, контекст.
 → Решение: достаточно? → Phase 6. Нужно больше? → Level 1.5.
+
+### Level 1.2: Keyless records + identity sweep (free, run alongside Level 1)
+
+Records first: a registry/DNS/CT/on-chain row is T1 and can carry a crosslink; a search hit cannot.
+```bash
+# Infra records (T1): RDAP/WHOIS, DNS over HTTPS, certificate transparency, ASN
+python3 skills/osint/scripts/osint-tool.py rdap example.com --case <case>
+python3 skills/osint/scripts/osint-tool.py doh example.com
+python3 skills/osint/scripts/osint-tool.py crtsh example.com
+python3 skills/osint/scripts/osint-tool.py certspotter example.com
+# Company / court / sanctions records
+python3 skills/osint/scripts/osint-tool.py gleif "Acme Corp"
+python3 skills/osint/scripts/osint-tool.py courtlistener "Acme Corp"
+python3 skills/osint/scripts/osint-tool.py ofac "Name"
+# Identity: every ready identity adapter on a handle / email / phone (all T3)
+python3 skills/osint/scripts/identity-sweep.py <handle|email|phone> --case <case>
+# Reddit history (archive keeps deleted posts)
+python3 skills/osint/scripts/reddit-arctic.py user <username> --case <case>
+```
+Tier reminder: every `osint-tool.py` / `enrich` result prints its tier. Reputation feeds,
+username hits, face-search hits and scraped profiles are T3 and never count as crosslinks
+(`.claude/rules/q-investigation.md`). `--case` saves `results.json` + `urls.tsv`; feed
+`urls.tsv` to `capture-evidence.sh --batch` before citing anything.
 
 ### Level 1.5: Breach Intel (free, run before any social scraping)
 

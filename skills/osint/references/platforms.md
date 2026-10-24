@@ -53,6 +53,14 @@
 - Topic clusters = real vs performative interests
 - Forwarded from = what they read/follow
 
+**tgspyder (Darksight-Analytics, submodule at `tools/tgspyder`) -- flags beyond `--members --chats`:**
+- `tgspyder https://t.me/<group> --crawl-invites` -- follow invite links posted in a group to discover linked channels (snowball discovery of an operator's network).
+- `tgspyder --sticker-pack https://t.me/addstickers/<pack>` -- resolve a sticker pack's creator account; a custom pack often deanonymizes the operator behind a channel.
+- `tgspyder --proxy socks5://127.0.0.1:9050 <target> --chats` -- route through Tor or another proxy (one-off override; tgspyder can also save a default proxy).
+- `tgspyder --user <username>` -- user lookup.
+
+Output lands as CSV. Register it with `ingest-client-document.sh <csv> <slug> document --case <case>` then `extract-intake.py --case <case>` so it carries an EV-NNNN ID. All tgspyder output is T3 until crosslinked.
+
 ## YouTube
 
 **Extract:** channel name, handle, subscriber count, video count, upload frequency, about/description, top videos by views, playlist structure.

@@ -8,7 +8,7 @@ superseded number quoted after its own correction, an overlap claim not supporte
 by the record it cited, two entities placed under the wrong upstream in a summary
 table, and an external-authority citation tagged as directly verified when it was
 a secondhand relay. The fleet already ships a mechanism built for exactly this
-(`q-system/.q-system/scripts/evidence_ledger.py`, append-only claim ledger + a
+(`.q-system/scripts/evidence_ledger.py`, append-only claim ledger + a
 `resolve` check that a document's numbers/quotes trace to a verified row) but it
 had never been adopted for workspace. This wrapper is that adoption.
 
@@ -38,7 +38,7 @@ import re
 import sys
 from pathlib import Path
 
-SKEL_SCRIPTS = Path(__file__).resolve().parents[4] / "q-system" / ".q-system" / "scripts"
+SKEL_SCRIPTS = Path(__file__).resolve().parents[3] / ".q-system" / "scripts"
 sys.path.insert(0, str(SKEL_SCRIPTS))
 import evidence_ledger as el  # noqa: E402
 

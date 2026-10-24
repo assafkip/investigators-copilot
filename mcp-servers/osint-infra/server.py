@@ -7,6 +7,8 @@ Tools:
   - reverse_dns: PTR record for an IP address
   - wayback_snapshots: List archived snapshots of a URL from the Wayback Machine
   - wayback_fetch: Fetch the content of a specific Wayback Machine snapshot
+  - enrich_providers / enrich: every adapter in skills/osint/scripts/lib/enrich
+  - reddit_user_history / reddit_subreddit_recent: keyless Reddit reads (Arctic Shift, PullPush, RSS)
 """
 
 import asyncio
@@ -223,6 +225,84 @@ async def wayback_fetch(url: str, timestamp: str = "") -> str:
         content = content[:10000] + "\n\n[TRUNCATED -- content exceeds 10,000 chars]"
 
     return content
+
+
+# ---------------------------------------------------------------------------
+# Reddit (keyless): Arctic Shift -> PullPush -> Reddit RSS
+# Shared library lives in skills/osint/scripts/lib so the CLI
+# (reddit-arctic.py) and this server cannot drift apart.
+# ---------------------------------------------------------------------------
+
+import sys as _sys
+from pathlib import Path as _Path
+
+_LIB = _Path(__file__).resolve().parents[2] / "skills" / "osint" / "scripts" / "lib"
+if str(_LIB) not in _sys.path:
+    _sys.path.insert(0, str(_LIB))
+
+
+@mcp.tool()
+async def reddit_user_history(username: str, max_items: int = 100) -> str:
+    """Posts and comments by one Reddit user (T3). Arctic Shift, then PullPush, then RSS.
+
+    A failure returns an ERROR string naming every route, never an empty list.
+    """
+    import reddit_arctic as ra
+    try:
+        out = await asyncio.to_thread(ra.user_history, username, max_items=max_items)
+    except ra.RedditFetchFailed as exc:
+        return f"ERROR: {exc}"
+    out["tier"] = "T3"
+    return json.dumps(out, ensure_ascii=False)[:60000]
+
+
+@mcp.tool()
+async def reddit_subreddit_recent(subreddit: str, max_items: int = 60) -> str:
+    """Recent posts in a subreddit (T3). Arctic Shift, then PullPush, then RSS."""
+    import reddit_arctic as ra
+    try:
+        rows = await asyncio.to_thread(ra.recent_with_rss, subreddit, max_items=max_items)
+    except ra.RedditFetchFailed as exc:
+        return f"ERROR: {exc}"
+    return json.dumps({"subreddit": subreddit, "posts": rows, "tier": "T3"}, ensure_ascii=False)[:60000]
+
+
+# ---------------------------------------------------------------------------
+# Shared enrichment adapters (skills/osint/scripts/lib/enrich).
+# Every adapter is reachable through these two tools, so adding a provider
+# never requires editing this server.
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def enrich_providers() -> str:
+    """List every enrichment provider: slug, category, evidence tier, modes, and
+    what is missing (API key env var or local binary) to run it."""
+    from enrich import registry
+    rows = await asyncio.to_thread(registry.describe_all)
+    return json.dumps({"providers": rows, "import_errors": registry.IMPORT_ERRORS})
+
+
+@mcp.tool()
+async def enrich(provider: str, query: str, mode: str = "") -> str:
+    """Run one enrichment provider (see enrich_providers for slugs and modes).
+
+    Each result carries its evidence tier: T1 = non-fakeable record (WHOIS/RDAP,
+    DNS, CT, registry, court, on-chain), T3 = automated tool output (hypothesis
+    queue only). Errors come back as an ERROR string, never an empty list.
+    """
+    from enrich import registry
+    from enrich.base import EnrichmentError
+    try:
+        adapter = registry.get_adapter(provider)
+    except KeyError:
+        return f"ERROR: unknown provider {provider!r}; call enrich_providers"
+    try:
+        results = await asyncio.to_thread(adapter.run, query, mode or None)
+    except EnrichmentError as exc:
+        return f"ERROR ({provider}): {exc}"
+    rows = [dict(r.to_dict(), source=provider) for r in results]
+    return json.dumps({"provider": provider, "query": query, "results": rows}, ensure_ascii=False)[:60000]
 
 
 # ---------------------------------------------------------------------------

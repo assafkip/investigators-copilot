@@ -2,12 +2,14 @@ Force a structured challenge of all investigation assumptions and hypotheses.
 
 This is a mid-investigation health check. Do NOT skip steps.
 
+**Active case:** read the case folder name from the first line of `.active-case` (written by `/q-begin` and `/q-new-case`). Every path below is inside `investigations/<case>/`. If `.active-case` is missing or empty, ask the founder which case to use. Never read or write the legacy root folders `canonical/`, `investigations/<case>/`, `memory/`.
+
 ## Steps
 
-1. Read `canonical/scope.md` for hypotheses
-2. Read ALL files in `investigations/<case>/findings/`
-3. Read `investigations/<case>/evidence/` index (list files, read key ones)
-4. Read `memory/investigation-state.md` for current assessment
+1. Read `investigations/<case>/canonical/scope.md` for hypotheses
+2. Read ALL files in `investigations/<case>/investigation/findings/`
+3. Read `investigations/<case>/investigation/evidence/` index (list files, read key ones)
+4. Read `investigations/<case>/memory/investigation-state.md` for current assessment
 
 ## For each hypothesis, answer:
 
@@ -30,7 +32,7 @@ This is a mid-investigation health check. Do NOT skip steps.
 
 ## Output
 
-Write to `investigations/<case>/findings/CHALLENGE-YYYY-MM-DD.md` with:
+Write to `investigations/<case>/investigation/findings/CHALLENGE-YYYY-MM-DD.md` with:
 - Each hypothesis: current confidence, revised confidence (if changed), and why
 - Top 3 weakest assumptions that need testing
 - Recommended collection to test (not confirm) the weakest assumptions

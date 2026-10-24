@@ -2,6 +2,8 @@ Challenger mode. Argue AGAINST current hypotheses and findings to find weak spot
 
 Different from /q-challenge (which audits evidence quality). This command adopts the opposing perspective and stress-tests conclusions.
 
+**Active case:** read the case folder name from the first line of `.active-case` (written by `/q-begin` and `/q-new-case`). Every path below is inside `investigations/<case>/`. If `.active-case` is missing or empty, ask the founder which case to use. Never read or write the legacy root folders `canonical/`, `investigations/<case>/`, `memory/`.
+
 ## Steps
 
 1. Read the active case's scope, findings, and investigation state
@@ -17,6 +19,7 @@ Different from /q-challenge (which audits evidence quality). This command adopts
    - What specific evidence would upgrade it to STRONG?
    - What's the simplest alternative explanation?
    - What collection could test it? (Energy tag + Time Est)
+5. Optional, when a draft brief/report exists: `python3 skills/osint/scripts/validate-citations.py <brief.md> --case <case>`. Dead links and citing sentences whose hard tokens are missing from the captured EV item are WEAK candidates.
 
 ## Output
 

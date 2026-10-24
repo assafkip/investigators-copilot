@@ -60,7 +60,7 @@ Before the first Edit, Write, or destructive Bash call: if the task touches more
     "clause": "Pre-Action Echo",
     "status": "ADVISORY",
     "note": "structurally unhookable: a PreToolUse hook sees tool_input, never prose, and waiting for OK needs a user turn",
-    "superseded_by": "was ENFORCED naming q-system/.q-system/scripts/test/test-token-discipline-rule-wired.sh as its receipt; that test pins the LABELLING, not this behaviour",
+    "superseded_by": "was ENFORCED naming .q-system/scripts/test/test-token-discipline-rule-wired.sh as its receipt; that test pins the LABELLING, not this behaviour",
     "marker_removal_ref": "sp-45473673",
     "directives": 1
   }

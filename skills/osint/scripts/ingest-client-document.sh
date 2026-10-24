@@ -66,23 +66,14 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-if [ -z "$CASE" ]; then
-  if [ -f "$WORKSPACE/.active-case" ]; then
-    CASE=$(head -1 "$WORKSPACE/.active-case" | tr -d '[:space:]')
-  else
-    echo "ERROR: no active case set and --case not given" >&2
-    exit 1
-  fi
-fi
+# Shared resolver: a case name under investigations/, or a path to a case
+# folder elsewhere (ASK-2617). Sets CASE and CASE_DIR.
+. "$SCRIPT_DIR/lib/active_case.sh"
+resolve_case_dir "$CASE" || exit 1
 
-CASE_DIR="$WORKSPACE/investigations/$CASE"
-if [ ! -d "$CASE_DIR" ]; then
-  echo "ERROR: case directory not found: $CASE_DIR" >&2
-  exit 1
-fi
-
-# Assign EV-NNNN ID
-EV_ID=$("$SCRIPT_DIR/next-ev-id.sh" "$CASE")
+# Assign EV-NNNN ID. Pass CASE_DIR, not CASE: for a case outside
+# investigations/ CASE is only the folder name and would resolve elsewhere.
+EV_ID=$("$SCRIPT_DIR/next-ev-id.sh" "$CASE_DIR")
 ITEM_DIR="$CASE_DIR/investigation/evidence/items/${EV_ID}-${SLUG}"
 mkdir -p "$ITEM_DIR"
 
