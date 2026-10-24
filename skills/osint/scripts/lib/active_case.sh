@@ -20,7 +20,7 @@ resolve_case_dir() {
     echo "ERROR: no active case set and no case argument given" >&2
     return 1
   fi
-  # A case may live outside investigations/ (e.g. infohawk/NNN-slug): a value
+  # A case may live outside investigations/ (e.g. external-leads/NNN-slug): a value
   # containing "/" that is an existing directory is used as the case folder
   # itself, and CASE becomes its folder name. Ported once here from the local
   # copies in next-ev-id.sh / capture-evidence.sh / ingest-client-document.sh

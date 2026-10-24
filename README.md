@@ -145,7 +145,7 @@ graph TB
 
 ### Not included
 
-Two things are deliberately left out of this kit. The automated face-search pipeline (`face-search.py`, `/q-face`) is dual-use. TGSpyder is third-party code with its own license; `telegram-harvest` takes its location from `TGSPYDER_SRC`.
+The automated face-search pipeline (`face-search.py`, `/q-face`) is left out because it is dual-use. The client-branded sample report `.docx` is left out; `templates/report-template/generate-report.js` builds the same report. TGSpyder ships under its own MIT license in `tools/tgspyder`, and `telegram-harvest` reads its location from `TGSPYDER_SRC`.
 
 ### MCP servers (bundled)
 
