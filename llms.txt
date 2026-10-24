@@ -1,6 +1,6 @@
 # Investigators Copilot
 
-> Investigation toolkit for Claude Code. Case management, OSINT, structured analytic techniques (Heuer / CIA tradecraft primer), chain-of-custody evidence capture, and bundled MCP servers for infrastructure recon and threat intel.
+> Free, MIT-licensed OSINT and investigation toolkit for Claude Code. 54 OSINT enrichment adapters, 24 slash commands, structured analytic techniques (Heuer / CIA tradecraft primer), chain-of-custody evidence capture, and bundled MCP servers for infrastructure recon and threat intel. Version 0.4.0 (2026-10-24).
 
 Investigators Copilot is a Claude Code plugin that turns Claude into an investigator, not just a scraper. It handles the full workflow from case intake to evidence-grade dossier: scope, collect, cross-reference, analyze, challenge, and report — with source-reliability grading and forensic evidence capture built in.
 
