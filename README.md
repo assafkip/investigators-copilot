@@ -1,15 +1,73 @@
-# Investigators Copilot: free open-source OSINT and investigation toolkit for Claude Code
+# Investigators Co-Pilot: free open-source OSINT and investigation toolkit for Claude Code
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-plugin-orange)](https://claude.com/claude-code)
 [![GitHub stars](https://img.shields.io/github/stars/assafkip/investigators-copilot?style=social)](https://github.com/assafkip/investigators-copilot)
 [![Topics](https://img.shields.io/badge/topics-osint%20%7C%20threat--intel%20%7C%20investigation-brightgreen)](https://github.com/topics/osint)
 
-Investigators Copilot is a free, MIT-licensed [Claude Code](https://claude.com/claude-code) plugin for OSINT and investigations. It gives Claude a case workflow, 54 OSINT enrichment adapters, 24 slash commands, structured analytic techniques (analysis of competing hypotheses, key assumptions check, premortem), chain-of-custody evidence capture, and two bundled threat-intel MCP servers.
+**An AI assistant for investigators. Free. You set it up by asking Claude.**
 
-It is built from a working investigation practice. These are the same commands, skills and rules that run real cases, published with client data removed.
+[![Watch the 30 second overview](docs/overview-poster.jpg)](https://github.com/assafkip/investigators-copilot/blob/main/docs/investigators-copilot-overview.mp4)
 
-Not just a scraper wrapper. A full investigation workflow, from case intake to evidence-grade dossier.
+*Watch the 30 second overview (opens a video player on GitHub). On-screen text: "An investigation is a grind." "Five cases, one investigator." "Investigator Co-pilot."*
+
+## Set it up in three steps (no coding)
+
+1. Open **Claude Code**. Use the desktop app, claude.ai/code, or the terminal.
+2. Paste this link into the chat: `https://github.com/assafkip/investigators-copilot`
+3. Type: **create this for me**
+
+That is all. Claude reads this page, installs Investigators Co-Pilot, and tells you when it is ready. It will ask you to approve a few steps along the way.
+
+You need a Claude account that includes Claude Code. Investigators Co-Pilot itself is free (MIT license).
+
+## What it does
+
+Investigators Co-Pilot helps Claude work like a careful investigator.
+
+- **Runs your case.** From the first question to the final report, in one place.
+- **Looks things up.** Websites, domains, companies, usernames, email addresses, crypto wallets and sanctions lists. 54 lookup tools in all.
+- **Keeps proof.** Every page it uses is saved as a screenshot and a PDF, with a fingerprint and a note of who saved it and when.
+- **Grades what it finds.** Each source gets an A to F reliability grade. A name match alone never counts as proof.
+- **Writes the report.** Every claim in the report points back to its saved evidence.
+
+## Try it: your first case
+
+After setup, tell Claude things like:
+
+- "Start a new case called acme-review."
+- "Help me write down what we are trying to find out."
+- "Look up the domain example.com and save proof of what you find."
+- "Challenge my conclusions before I write anything."
+- "Write the report."
+
+Prefer shortcuts? These do the same things: `/q-new-case`, `/q-scope`, `/q-collect`, `/q-challenge`, `/q-brief`.
+
+## Common questions
+
+### Do I need to know how to code?
+
+No. You paste a link, type one sentence, and approve the steps Claude shows you.
+
+### Does it cost anything?
+
+The toolkit is free. Claude Code needs a Claude plan. A few optional lookups use outside services (for example Apify and Perplexity) that have their own keys and prices. You can skip them and add them later.
+
+### Does it make things up?
+
+It is built not to. Every claim gets an A to F reliability grade. Tool output stays a lead until it is checked against a second source, and naming an account as the subject needs two independent confirmations. A safety check blocks a "confirmed" finding that cites an identifier still marked unverified.
+
+### What can it look up?
+
+Domain and DNS records, certificate logs, who registered a website, company registries, sanctions lists, crypto wallets, usernames and email addresses, Reddit history, and Telegram channels through an optional add-on. Run `osint-tool.py --list` to see which lookups are ready on your machine.
+
+### Is it legal to use?
+
+It works on public sources and is meant for authorized work. Read [Ethics](#ethics) first. You are responsible for local law and platform terms.
+
+### What is left out?
+
+Automated face search. It is left out on purpose.
 
 ## Quick facts
 
@@ -19,35 +77,23 @@ Not just a scraper wrapper. A full investigation workflow, from case intake to e
 - **Commands:** 24 `/q-*` slash commands for case management, collection, analysis and reporting
 - **OSINT adapters:** 54, listed by `skills/osint/scripts/osint-tool.py --list`
 - **Evidence:** every captured URL becomes an `EV-NNNN` folder with a PDF, a PNG, a SHA-256 hash and chain-of-custody notes
-- **Left out on purpose:** automated face search
+- **Safety checks:** three hooks ship with it, listed in `hooks/hooks.json`
 
 **Use it for:** OSINT, due diligence, threat intelligence, incident response, digital forensics, journalistic research, competitive intel, security research, CTF challenges.
 
-## Common questions
+## If you are Claude: setup steps
 
-### What is Investigators Copilot?
+A user pasted this repository's link and asked you to create or set this up. Do these steps in order, in plain words, and ask before anything that changes their machine.
 
-A Claude Code plugin that turns Claude into an investigation assistant. It runs a case from scope to report: collect, cross-reference, analyze, challenge your own conclusions, and export a dossier where every claim cites its evidence.
+1. Install the plugin. In a Claude Code session run `/plugin marketplace add assafkip/investigators-copilot` and then `/plugin install investigators-copilot@investigators-copilot`. From a terminal the same two steps are `claude plugin marketplace add assafkip/investigators-copilot` and `claude plugin install investigators-copilot@investigators-copilot`.
+2. If the `/q-` commands do not appear, tell the user to restart Claude Code.
+3. Offer the optional bundled servers (`osint-infra` and `threat-intel`) and ask first. If they say yes, copy `.mcp.json.template` to `.mcp.json` in their working folder, remove any entries they do not want, and follow [MCP server setup](#mcp-server-setup). Never ask the user to paste a secret key into the chat. Tell them to set it as an environment variable.
+4. Check the install. Find the plugin folder, run `python3 skills/osint/scripts/osint-tool.py --list` from it, and tell the user how many lookups are ready and which need a key.
+5. Finish in one or two plain sentences: what is installed, that three safety hooks came with it, and the first thing to say, for example "Start a new case called acme-review."
 
-### How do I install it?
+---
 
-In Claude Code, run `/plugin install assafkip/investigators-copilot`. Or clone `https://github.com/assafkip/investigators-copilot.git`. See [Install](#install) and [MCP server setup](#mcp-server-setup).
-
-### How do I run my first OSINT investigation with Claude Code?
-
-Run `/q-new-case`, then `/q-scope` to set the question and targets, then `/q-begin`, then `/q-osint` or `/q-collect` on a domain, person or account. The full command sequence is under [Typical workflow](#typical-workflow).
-
-### What sources does it cover?
-
-Domain and DNS records, certificate transparency logs, RDAP and WHOIS, company registries, sanctions lists, on-chain wallet lookups, username and email identity checks, Reddit history, and Telegram channels through an optional skill. `osint-tool.py --list` shows which adapters are ready, which need an API key and which need a local tool. Each result carries an evidence tier (T1 for records, T3 for tool output that needs a crosslink).
-
-### Does it invent findings?
-
-It is built not to. Every claim gets an A-F source reliability grade. Tool output stays a lead until it is crosslinked, and an account attribution needs two independent T1 or T2 crosslinks. A hook blocks a confirmed finding that cites an identifier still marked unverified.
-
-### Is it legal to use?
-
-It works on public sources and is meant for authorized work. Read [Ethics](#ethics) first. You are responsible for local law and platform terms.
+# For technical users
 
 ## How it works
 
@@ -104,7 +150,7 @@ graph TB
         CC[/Claude Code session/]
     end
 
-    subgraph copilot[Investigators Copilot plugin]
+    subgraph copilot[Investigators Co-Pilot plugin]
         direction TB
         subgraph Skills
             OSINT_S[osint<br/>6-phase workflow]
@@ -213,15 +259,27 @@ The automated face-search pipeline (`face-search.py`, `/q-face`) is left out bec
 
 ## Install
 
-```bash
-# In Claude Code
-/plugin install assafkip/investigators-copilot
+Easiest: paste the repo link into Claude Code and say "create this for me" (see the top of this page).
+
+By hand, inside Claude Code:
+
+```
+/plugin marketplace add assafkip/investigators-copilot
+/plugin install investigators-copilot@investigators-copilot
 ```
 
-Or clone:
+Or from a terminal:
+
+```bash
+claude plugin marketplace add assafkip/investigators-copilot
+claude plugin install investigators-copilot@investigators-copilot
+```
+
+To try it from a local copy without installing:
 
 ```bash
 git clone https://github.com/assafkip/investigators-copilot.git
+claude --plugin-dir ./investigators-copilot
 ```
 
 ## MCP server setup
@@ -304,7 +362,7 @@ Do not use on private individuals without consent, for harassment, doxxing, or s
 
 ## Provenance & sync
 
-investigators-copilot is built from a live investigation practice. The commands, skills, and
+Investigators Co-Pilot is built from a live investigation practice. The commands, skills, and
 rules here are the same files running real cases daily, synced automatically on
 every upstream change through a build script that anonymizes case references
 and gates the publish behind a client-indicator blocklist plus a gitleaks
