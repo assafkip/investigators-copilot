@@ -7,13 +7,21 @@
 #        identity-lookup.sh github <username>
 #        identity-lookup.sh mastodon <query>
 #        identity-lookup.sh leakcheck <email>
+#        identity-lookup.sh sweep <handle|email|phone> [case]
+#          -> runs identity-sweep.py: every ready identity adapter, merged, T3
 set -euo pipefail
 
-CMD="${1:?Usage: identity-lookup.sh keybase|github|mastodon|leakcheck <query>}"
+CMD="${1:?Usage: identity-lookup.sh keybase|github|mastodon|leakcheck|sweep <query> [case]}"
 QUERY="${2:?Missing query}"
-UA="huntkit-osint/1.0 (+investigation tooling)"
+UA="investigators-copilot-osint/1.0 (+investigation tooling)"
 
 case "$CMD" in
+  sweep)
+    # All ready identity adapters at once (osint-tool.py framework). Results are T3.
+    TARGET="$QUERY"
+    CASE="${3:-}"
+    python3 "$(dirname "$0")/identity-sweep.py" "$TARGET" ${CASE:+--case "$CASE"}
+    ;;
   keybase)
     # Verified identities + cryptographically signed social proofs (T2-grade,
     # not a name-match hypothesis -- the proof is signed by the account).
@@ -119,7 +127,7 @@ if sources:
 "
     ;;
   *)
-    echo "Unknown command: $CMD (use keybase|github|mastodon|leakcheck)" >&2
+    echo "Unknown command: $CMD (use keybase|github|mastodon|leakcheck|sweep)" >&2
     exit 1
     ;;
 esac

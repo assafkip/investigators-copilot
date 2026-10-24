@@ -1,5 +1,7 @@
 End investigation session. Summarize all changes and save state.
 
+**Active case:** read the case folder name from the first line of `.active-case` (written by `/q-begin` and `/q-new-case`). Every path below is inside `investigations/<case>/`. If `.active-case` is missing or empty, ask the founder which case to use. Never read or write the legacy root folders `canonical/`, `investigations/<case>/`, `memory/`.
+
 ## Steps
 
 1. List all files modified during this conversation (investigation files, findings, evidence, targets)

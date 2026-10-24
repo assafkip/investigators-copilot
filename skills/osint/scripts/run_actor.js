@@ -12,12 +12,25 @@
  *   node scripts/run_actor.js --actor ACTOR_ID --input '{}' --output leads.csv --format csv
  *
  * Env: APIFY_TOKEN or APIFY_API_TOKEN (either works)
+ *
+ * Investigators Copilot spend guardrails (2026-10-10; upstream apify/agent-skills dropped
+ * this runner, so this is a maintained fork): every run is capped with
+ * maxItems + maxTotalChargeUsd, deprecated actors are refused, and a price
+ * probe warns above $5 and refuses above $20 without --confirm-spend.
  */
 
 import { parseArgs } from 'node:util';
 import { writeFileSync, readFileSync, statSync } from 'node:fs';
 
 const USER_AGENT = 'osint-skill/3.1 (apify-agent-skills/apify-ultimate-scraper-1.3.0)';
+
+function authHeaders(token, extra = {}) {
+    return {
+        ...extra,
+        'Authorization': `Bearer ${token}`,
+        'User-Agent': USER_AGENT,
+    };
+}
 
 function parseCliArgs() {
     const options = {
@@ -27,6 +40,9 @@ function parseCliArgs() {
         format: { type: 'string', short: 'f', default: 'csv' },
         timeout: { type: 'string', short: 't', default: '600' },
         'poll-interval': { type: 'string', default: '5' },
+        'max-items': { type: 'string', default: '100' },
+        'max-charge-usd': { type: 'string', default: '5' },
+        'confirm-spend': { type: 'boolean', default: false },
         help: { type: 'boolean', short: 'h' },
     };
 
@@ -56,6 +72,9 @@ function parseCliArgs() {
         format: values.format || 'csv',
         timeout: parseInt(values.timeout, 10),
         pollInterval: parseInt(values['poll-interval'], 10),
+        maxItems: parseInt(values['max-items'], 10),
+        maxChargeUsd: parseFloat(values['max-charge-usd']),
+        confirmSpend: values['confirm-spend'],
     };
 }
 
@@ -73,15 +92,87 @@ Options:
   --format, -f      Output format: csv, json (default: csv)
   --timeout, -t     Max wait time in seconds (default: 600)
   --poll-interval   Seconds between status checks (default: 5)
+  --max-items       Hard cap on dataset items (default: 100)
+  --max-charge-usd  Hard cap on pay-per-event spend in USD (default: 5)
+  --confirm-spend   Required when the estimated cost exceeds $20
   --help, -h        Show this help message
 
 Env: APIFY_TOKEN or APIFY_API_TOKEN (either works)
 `);
 }
 
-async function startActor(token, actorId, inputJson) {
+const WARN_USD = 5;
+const CONFIRM_USD = 20;
+
+// One event's price. Store prices are tiered by plan (FREE..DIAMOND); use the
+// highest tier so the estimate is an upper bound, never an undercount.
+function eventPriceUsd(event) {
+    if (typeof event.eventPriceUsd === 'number') return event.eventPriceUsd;
+    const tiers = Object.values(event.eventTieredPricingUsd || {});
+    return Math.max(0, ...tiers.map((t) => t.tieredEventPriceUsd || 0));
+}
+
+// Price of one dataset item / one event from the actor's current pricing entry.
+function unitPriceUsd(pricing) {
+    if (!pricing) return 0;
+    if (pricing.pricingModel === 'PRICE_PER_DATASET_ITEM') return pricing.pricePerUnitUsd || 0;
+    if (pricing.pricingModel === 'PAY_PER_EVENT') {
+        const events = (pricing.pricingPerEvent || {}).actorChargeEvents || {};
+        return Math.max(0, ...Object.values(events).map(eventPriceUsd));
+    }
+    return 0;
+}
+
+async function probeActor(token, actorId, maxItems) {
+    const url = `https://api.apify.com/v2/acts/${actorId.replace('/', '~')}`;
+    // Store actors are public: probe without the token first, then retry
+    // authenticated for private actors (which return 404 anonymously).
+    let response = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
+    if (response.status === 404 || response.status === 401) {
+        response = await fetch(url, { headers: authHeaders(token) });
+    }
+    if (response.status === 404) {
+        console.error(`Error: Actor '${actorId}' not found`);
+        process.exit(1);
+    }
+    if (!response.ok) {
+        console.error(`Warning: price probe failed (${response.status}); caps still apply`);
+        return { deprecated: false, estimateUsd: 0, model: 'unknown' };
+    }
+    const actor = (await response.json()).data || {};
+    const infos = actor.pricingInfos || [];
+    const pricing = infos.length ? infos[infos.length - 1] : null;
+    const unit = unitPriceUsd(pricing);
+    return {
+        deprecated: Boolean(actor.isDeprecated),
+        model: pricing ? pricing.pricingModel : 'FREE',
+        unitUsd: unit,
+        estimateUsd: unit * maxItems,
+    };
+}
+
+function enforceSpendPolicy(probe, args) {
+    if (probe.deprecated) {
+        console.error(`Error: actor '${args.actor}' is deprecated on Apify Store; pick a maintained actor`);
+        process.exit(4);
+    }
+    const est = Math.min(probe.estimateUsd, args.maxChargeUsd || probe.estimateUsd);
+    console.error(`Pricing: ${probe.model}; est. up to $${est.toFixed(2)} (cap maxItems=${args.maxItems}, maxTotalChargeUsd=$${args.maxChargeUsd})`);
+    if (probe.estimateUsd > CONFIRM_USD && !args.confirmSpend) {
+        console.error(`Refusing: estimate $${probe.estimateUsd.toFixed(2)} > $${CONFIRM_USD}. Re-run with --confirm-spend or lower --max-items.`);
+        process.exit(5);
+    }
+    if (probe.estimateUsd > WARN_USD) {
+        console.error(`WARNING: estimate $${probe.estimateUsd.toFixed(2)} exceeds $${WARN_USD}`);
+    }
+}
+
+async function startActor(token, actorId, inputJson, caps = {}) {
     const apiActorId = actorId.replace('/', '~');
-    const url = `https://api.apify.com/v2/acts/${apiActorId}/runs?token=${encodeURIComponent(token)}`;
+    const query = new URLSearchParams();
+    if (caps.maxItems) query.set('maxItems', String(caps.maxItems));
+    if (caps.maxChargeUsd) query.set('maxTotalChargeUsd', String(caps.maxChargeUsd));
+    const url = `https://api.apify.com/v2/acts/${apiActorId}/runs?${query}`;
 
     let data;
     try {
@@ -93,10 +184,9 @@ async function startActor(token, actorId, inputJson) {
 
     const response = await fetch(url, {
         method: 'POST',
-        headers: {
+        headers: authHeaders(token, {
             'Content-Type': 'application/json',
-            'User-Agent': USER_AGENT,
-        },
+        }),
         body: JSON.stringify(data),
     });
 
@@ -119,12 +209,12 @@ async function startActor(token, actorId, inputJson) {
 }
 
 async function pollUntilComplete(token, runId, timeout, interval) {
-    const url = `https://api.apify.com/v2/actor-runs/${runId}?token=${encodeURIComponent(token)}`;
+    const url = `https://api.apify.com/v2/actor-runs/${runId}`;
     const startTime = Date.now();
     let lastStatus = null;
 
     while (true) {
-        const response = await fetch(url);
+        const response = await fetch(url, { headers: authHeaders(token) });
         if (!response.ok) {
             const text = await response.text();
             console.error(`Error: Failed to get run status: ${text}`);
@@ -154,10 +244,10 @@ async function pollUntilComplete(token, runId, timeout, interval) {
 }
 
 async function downloadResults(token, datasetId, outputPath, format) {
-    const url = `https://api.apify.com/v2/datasets/${datasetId}/items?token=${encodeURIComponent(token)}&format=json`;
+    const url = `https://api.apify.com/v2/datasets/${datasetId}/items?format=json`;
 
     const response = await fetch(url, {
-        headers: { 'User-Agent': USER_AGENT },
+        headers: authHeaders(token),
     });
 
     if (!response.ok) {
@@ -202,10 +292,10 @@ async function downloadResults(token, datasetId, outputPath, format) {
 }
 
 async function displayQuickAnswer(token, datasetId) {
-    const url = `https://api.apify.com/v2/datasets/${datasetId}/items?token=${encodeURIComponent(token)}&format=json`;
+    const url = `https://api.apify.com/v2/datasets/${datasetId}/items?format=json`;
 
     const response = await fetch(url, {
-        headers: { 'User-Agent': USER_AGENT },
+        headers: authHeaders(token),
     });
 
     if (!response.ok) {
@@ -285,8 +375,12 @@ async function main() {
         process.exit(1);
     }
 
+    const probe = await probeActor(token, args.actor, args.maxItems);
+    enforceSpendPolicy(probe, args);
+
     console.log(`Starting actor: ${args.actor}`);
-    const { runId, datasetId } = await startActor(token, args.actor, args.input);
+    const { runId, datasetId } = await startActor(token, args.actor, args.input,
+        { maxItems: args.maxItems, maxChargeUsd: args.maxChargeUsd });
     console.log(`Run ID: ${runId}`);
     console.log(`Dataset ID: ${datasetId}`);
 

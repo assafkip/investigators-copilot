@@ -1,0 +1,18 @@
+{
+  "United States": ["united states", "usa", "u.s.", "us acc", "us account", "american", "америк", "сша", "美国", "hoa kỳ"],
+  "Spain": ["spain", "spanish", "испан", "西班牙", "tay ban nha"],
+  "Peru": ["peru", "peruvian", "перу", "秘鲁"],
+  "Argentina": ["argentina", "argentinian", "аргентин", "阿根廷"],
+  "Russia": ["russia", "russian", "россия", "俄罗斯"],
+  "Vietnam": ["vietnam", "vietnamese", "вьетнам", "越南", "viet nam"],
+  "China": ["china", "chinese", "китай", "中国", "trung quoc"],
+  "United Kingdom": ["united kingdom", "u.k.", "uk acc", "uk account", "british", "britain", "англия", "великобритан", "英国"],
+  "Germany": ["germany", "german", "герман", "德国"],
+  "France": ["france", "french", "франц", "法国"],
+  "Brazil": ["brazil", "brazilian", "бразил", "巴西", "brasil"],
+  "India": ["india", "indian", "инди", "印度"],
+  "Indonesia": ["indonesia", "индонез", "印尼", "印度尼西亚"],
+  "Philippines": ["philippines", "filipino", "филиппин", "菲律宾"],
+  "Turkey": ["turkey", "turkish", "турци", "土耳其"],
+  "Ukraine": ["ukraine", "ukrainian", "украин", "乌克兰"]
+}

@@ -1,13 +1,13 @@
 {
-  "name": "huntkit",
-  "version": "0.3.0",
-  "description": "Investigation toolkit for Claude Code. Case management, OSINT, structured analytic techniques (Heuer / CIA tradecraft primer), chain-of-custody evidence capture, and bundled MCP servers for infrastructure recon and threat intel.",
+  "name": "investigators-copilot",
+  "version": "0.4.0",
+  "description": "Investigation toolkit for Claude Code. Case management, OSINT with 54 enrichment adapters, structured analytic techniques (Heuer / CIA tradecraft primer), chain-of-custody evidence capture, claims ledger, and bundled MCP servers for infrastructure recon and threat intel.",
   "author": {
     "name": "assafkip",
     "url": "https://github.com/assafkip"
   },
-  "homepage": "https://github.com/assafkip/huntkit",
-  "repository": "https://github.com/assafkip/huntkit",
+  "homepage": "https://github.com/assafkip/investigators-copilot",
+  "repository": "https://github.com/assafkip/investigators-copilot",
   "license": "MIT",
   "keywords": [
     "osint",

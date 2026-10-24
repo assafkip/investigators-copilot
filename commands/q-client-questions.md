@@ -2,12 +2,14 @@ Draft targeted questions for the client based on current collection gaps.
 
 The client often knows the answer to questions that would take 50+ tool calls to research. Ask early, ask smart.
 
+**Active case:** read the case folder name from the first line of `.active-case` (written by `/q-begin` and `/q-new-case`). Every path below is inside `investigations/<case>/`. If `.active-case` is missing or empty, ask the founder which case to use. Never read or write the legacy root folders `canonical/`, `investigations/<case>/`, `memory/`.
+
 ## Steps
 
-1. Read `canonical/scope.md` for hypotheses and primary question
-2. Read `canonical/collection-plan.md` for outstanding gaps
-3. Read `investigations/<case>/targets/` for collection status on each target
-4. Read `memory/investigation-state.md` for what's been tried
+1. Read `investigations/<case>/canonical/scope.md` for hypotheses and primary question
+2. Read `investigations/<case>/canonical/collection-plan.md` for outstanding gaps
+3. Read `investigations/<case>/investigation/targets/` for collection status on each target
+4. Read `investigations/<case>/memory/investigation-state.md` for what's been tried
 
 ## Draft 3-5 questions that:
 

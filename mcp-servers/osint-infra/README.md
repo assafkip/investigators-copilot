@@ -11,36 +11,19 @@ MCP server for OSINT infrastructure lookups: DNS, WHOIS, and Wayback Machine.
 | `reverse_dns` | PTR record for an IP address |
 | `wayback_snapshots` | List archived snapshots of a URL |
 | `wayback_fetch` | Fetch content of a specific archived snapshot |
+| `reddit_user_history` | Posts + comments by a Reddit user (Arctic Shift, PullPush, RSS) |
+| `reddit_subreddit_recent` | Recent posts in a subreddit (same routes) |
 
-## Setup
+## Setup and run
 
-```bash
-cd osint-infra-mcp
-python3.13 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-## Run standalone
+Vendored into Investigators Copilot (no longer a separate repo). `.mcp.json` launches it with uv:
 
 ```bash
-python server.py
+uv run --directory tools/osint-infra-mcp server.py
 ```
 
-## Add to Claude Code
-
-Add to `.mcp.json` in your project root:
-
-```json
-{
-  "mcpServers": {
-    "osint-infra": {
-      "command": "tools/osint-infra-mcp/.venv/bin/python",
-      "args": ["tools/osint-infra-mcp/server.py"]
-    }
-  }
-}
-```
+The Reddit tools (`reddit_user_history`, `reddit_subreddit_recent`) import the shared
+library at `skills/osint/scripts/lib/`, the same code the CLI scripts use.
 
 ## Requirements
 

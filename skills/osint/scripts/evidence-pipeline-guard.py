@@ -11,7 +11,7 @@
 # an existing one cannot be run (Bash) while any file in investigation/intake/
 # lacks BOTH (a) a registered EV-NNNN item and (b) a deterministic extraction.
 #
-# Wired in .claude/settings.json (this instance) as a PostToolUse
+# Wired in .claude/settings.json (4_points_consulting instance) as a PostToolUse
 # hook on Write/Edit/MultiEdit/Bash. kipi update safety: this script lives under
 #  (instance content), not q-system/ (skeleton subtree overwritten
 # by `kipi update`), per RULE-2026-06-30-A. .claude/settings.json itself is also

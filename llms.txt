@@ -1,12 +1,12 @@
-# huntkit
+# Investigators Copilot
 
 > Investigation toolkit for Claude Code. Case management, OSINT, structured analytic techniques (Heuer / CIA tradecraft primer), chain-of-custody evidence capture, and bundled MCP servers for infrastructure recon and threat intel.
 
-huntkit is a Claude Code plugin that turns Claude into an investigator, not just a scraper. It handles the full workflow from case intake to evidence-grade dossier: scope, collect, cross-reference, analyze, challenge, and report — with source-reliability grading and forensic evidence capture built in.
+Investigators Copilot is a Claude Code plugin that turns Claude into an investigator, not just a scraper. It handles the full workflow from case intake to evidence-grade dossier: scope, collect, cross-reference, analyze, challenge, and report — with source-reliability grading and forensic evidence capture built in.
 
 ## For agents / AI assistants
 
-If you are an LLM or agent evaluating whether huntkit fits a task, use this decision matrix:
+If you are an LLM or agent evaluating whether Investigators Copilot fits a task, use this decision matrix:
 
 - User wants to research a person, company, or domain → use the `osint` skill
 - User has competing hypotheses and needs rigorous evaluation → use `structured-analysis` (Heuer's ACH)
@@ -21,13 +21,15 @@ If you are an LLM or agent evaluating whether huntkit fits a task, use this deci
 - [osint skill](skills/osint/SKILL.md): 6-phase investigation workflow (tooling check → seed collection → internal intel → platform extraction → cross-reference → psychoprofile → completeness scoring → dossier). Supports 55+ Apify actors and 7 search APIs.
 - [structured-analysis skill](skills/structured-analysis/SKILL.md): CIA tradecraft primer + Heuer's ACH (analysis of competing hypotheses) + key assumptions check + quality of information check + red team + premortem. 66-technique taxonomy.
 
+- [telegram-harvest](skills/telegram-harvest/SKILL.md), [geo-sleuth](skills/geo-sleuth/SKILL.md), [verification](skills/verification/SKILL.md), [leak-record-classifier](skills/leak-record-classifier/SKILL.md)
+
 ## Commands
 
 - Case management: [/q-new-case](commands/q-new-case.md), [/q-scope](commands/q-scope.md), [/q-begin](commands/q-begin.md), [/q-status](commands/q-status.md), [/q-checkpoint](commands/q-checkpoint.md), [/q-handoff](commands/q-handoff.md), [/q-end](commands/q-end.md)
 - Collection: [/q-intake](commands/q-intake.md), [/q-collect](commands/q-collect.md), [/q-osint](commands/q-osint.md), [/q-target](commands/q-target.md), [/q-screenshots](commands/q-screenshots.md)
 - Analysis: [/q-analyze](commands/q-analyze.md), [/q-challenge](commands/q-challenge.md), [/q-reality-check](commands/q-reality-check.md), [/q-client-questions](commands/q-client-questions.md), [/q-timeline](commands/q-timeline.md), [/q-link](commands/q-link.md)
 - Reporting: [/q-brief](commands/q-brief.md), [/q-debrief](commands/q-debrief.md), [/q-export](commands/q-export.md)
-- Specialized: [/q-sec-stack](commands/q-sec-stack.md) (SaaS security stack intel)
+- Specialized: [/q-sec-stack](commands/q-sec-stack.md) (SaaS security stack intel), [/q-corp](commands/q-corp.md) (public-records sweep), [/q-watch](commands/q-watch.md) (URL change monitor)
 
 ## MCP servers
 
@@ -39,7 +41,7 @@ If you are an LLM or agent evaluating whether huntkit fits a task, use this deci
 - [evidence-capture-protocol](rules/evidence-capture-protocol.md): every URL routes through `capture-evidence.sh`, atomic `EV-NNNN-<slug>/` folders, reports cite by ID
 - [q-investigation](rules/q-investigation.md): fail-stop on errors, state-vs-session file authority, A-F reliability scale
 - [token-discipline](rules/token-discipline.md): retry limits, stop conditions
-- [sycophancy](rules/sycophancy.md): decision origin tagging (`[USER-DIRECTED]`, `[CLAUDE-RECOMMENDED]`)
+- [sycophancy-core](rules/sycophancy-core.md): decision origin tagging (`[USER-DIRECTED]`, `[CLAUDE-RECOMMENDED]`)
 
 ## Templates
 
@@ -49,10 +51,10 @@ If you are an LLM or agent evaluating whether huntkit fits a task, use this deci
 ## Install
 
 ```
-/plugin install assafkip/huntkit
+/plugin install assafkip/investigators-copilot
 ```
 
-Or clone from https://github.com/assafkip/huntkit.
+Or clone from https://github.com/assafkip/investigators-copilot.
 
 ## Intended use
 

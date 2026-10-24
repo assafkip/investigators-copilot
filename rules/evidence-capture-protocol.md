@@ -25,24 +25,33 @@ The EV-NNNN ID is zero-padded four digits, assigned by `skills/osint/scripts/nex
 
 ```
 bash skills/osint/scripts/capture-evidence.sh <url> <slug> \
-  [--case <case-folder>] [--account <@handle>] [--platform <name>] [--note "text"]
+  [--case <case-folder>] [--account <@handle>] [--platform <name>] [--note "text"] \
+  [--social] [--archivebox]
+bash skills/osint/scripts/capture-evidence.sh --batch <urls.tsv> [--case <case-folder>]
 ```
 
 This script:
 1. Assigns the next EV-NNNN
-2. Submits to Wayback Machine
-3. Submits to archive.today
+2. Wayback Machine submission -- SKIPPED (local-only mode; the script records `"status": "SKIPPED"`)
+3. archive.today submission -- SKIPPED (local-only mode)
 4. Runs Chrome headless to produce `capture.pdf` + `capture.png`
 5. Computes SHA-256 of the PDF
 6. Writes `source.json`, `chain-of-custody.md`, `content.md` stub
+7. Carves artifacts from the capture (QR codes via `zbarimg`, EXIF GPS via `exiftool`, wallet/email/URL strings) into `content.md`. Every tool is optional and this step can never mark the item INCOMPLETE.
 
-If any of steps 2-5 fail, the item is marked `INCOMPLETE` in `source.json` and the script exits non-zero. An INCOMPLETE item **may not be cited in any report** until it's resolved or explicitly re-classified.
+Optional, additive flags (both run AFTER steps 1-7; files go to the item's `media/`):
+- `--social` downloads the post's media with yt-dlp, gallery-dl and/or bellingcat auto-archiver (whichever are installed; auto-archiver only with `$AUTO_ARCHIVER_CONFIG`), hashes every file into the item's `media-manifest.json`, and notes it in `content.md`.
+- `--archivebox` submits the URL to a self-hosted ArchiveBox (`$ARCHIVEBOX_URL`, optional `$ARCHIVEBOX_API_KEY`) and keeps the response as `media/archivebox.json`.
+
+Neither flag can flip an item's status (a COMPLETE item stays COMPLETE if a media download fails; an INCOMPLETE item is not rescued by a successful one), and neither edits `source.json`. Install the tools with `setup-tools.sh --only yt-dlp,gallery-dl,auto-archiver` or `--docker archivebox`.
+
+If step 4 or 5 fails, the item is marked `INCOMPLETE` in `source.json` and the script exits non-zero. An INCOMPLETE item **may not be cited in any report** until it's resolved or explicitly re-classified. (Steps 2-3 are intentionally skipped, not failures.)
 
 **Do not write your own capture logic. Do not manually zip screenshots.** Use the script. If the script is broken, fix the script, do not bypass it.
 
 ## SCREENSHOT_ONLY evidence class
 
-For client-provided evidence where the original URL is lost (e.g., the Sowell PDF the client gave us on 2026-04-09), use this structure:
+For client-provided evidence where the original URL is lost (e.g., the PDF the client gave us on 2026-04-09), use this structure:
 
 ```
 items/EV-NNNN-<slug>/
@@ -87,8 +96,6 @@ Fail-stop rule applies. If `capture-evidence.sh` fails:
 3. Wait for instructions before continuing.
 
 Common failure modes:
-- Wayback rate limits (they throttle aggressive submitters) -- back off, space requests
-- archive.today captchas on new submissions -- may require manual fallback
 - Chrome headless blocked by a paywall or login wall -- the PDF will be the login page; mark INCOMPLETE and flag
 - URL redirects to a 404 or deleted page -- archive still useful; mark INCOMPLETE if Chrome can't render
 

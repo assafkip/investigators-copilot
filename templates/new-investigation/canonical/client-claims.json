@@ -1,0 +1,11 @@
+{
+  "subject_name": "{{SUBJECT_NAME}}",
+  "identifiers": [
+    {
+      "value": "{{IDENTIFIER_VALUE}}",
+      "type": "{{email|phone|username|ssn|handle}}",
+      "status": "UNVERIFIED",
+      "verified_by": ""
+    }
+  ]
+}

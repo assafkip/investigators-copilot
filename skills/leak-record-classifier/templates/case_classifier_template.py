@@ -90,7 +90,7 @@ TIER_CONFIG = [
 CLEANED_TIERS = {"confirmed", "flagged"}
 FILTERED_OUT_TIERS = {"excluded", "unrelated"}
 
-OUTPUT_BASENAME = "case"   # e.g. "goodgame" -> goodgame_cleaned.csv
+OUTPUT_BASENAME = "case"   # e.g. "example" -> example_cleaned.csv
 
 
 def main():

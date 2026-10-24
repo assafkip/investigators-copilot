@@ -1,6 +1,6 @@
 Generate a session handoff note for continuity across Claude Code sessions.
 
-Save to the active case's `memory/last-handoff.md`.
+Save to the active case's `memory/last-handoff.md`, i.e. `investigations/<case>/memory/last-handoff.md`, where `<case>` is the first line of `.active-case` (ask the founder if it is missing or empty).
 
 ## Handoff Contents
 

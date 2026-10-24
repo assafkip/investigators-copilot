@@ -33,6 +33,9 @@ investigations/
 evidence/
 raw-collections/
 output/
+# ...except the empty scaffold a new case is copied from
+!templates/new-investigation/investigation/evidence/
+!templates/new-investigation/output/
 *.docx
 *.pdf
 

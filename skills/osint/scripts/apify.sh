@@ -11,38 +11,44 @@ WORKSPACE="$(cd "$SKILL_DIR/../.." && pwd)"
 
 TOKEN="${APIFY_API_TOKEN:?ERROR: APIFY_API_TOKEN not set. Get one at https://console.apify.com/account/integrations}"
 BASE="https://api.apify.com/v2"
+AUTH=(-H "Authorization: Bearer $TOKEN")
+# Spend caps on every run (2026-10-10). Override per call via env.
+CAPS="maxItems=${APIFY_MAX_ITEMS:-100}&maxTotalChargeUsd=${APIFY_MAX_CHARGE_USD:-5}"
 
 case "${1:-help}" in
   run)
     ACTOR_ID="$2"
     INPUT="$3"
-    curl -s -X POST "$BASE/acts/$ACTOR_ID/runs?token=$TOKEN" \
+    curl -s -X POST "$BASE/acts/$ACTOR_ID/runs?$CAPS" \
+      "${AUTH[@]}" \
       -H "Content-Type: application/json" \
       -d "$INPUT"
     ;;
   results)
     RUN_ID="$2"
-    curl -s "$BASE/actor-runs/$RUN_ID/dataset/items?token=$TOKEN"
+    curl -s "${AUTH[@]}" "$BASE/actor-runs/$RUN_ID/dataset/items"
     ;;
   run-status)
     RUN_ID="$2"
-    curl -s "$BASE/actor-runs/$RUN_ID?token=$TOKEN"
+    curl -s "${AUTH[@]}" "$BASE/actor-runs/$RUN_ID"
     ;;
   store-search)
     QUERY="${*:2}"
-    curl -s "$BASE/store?token=$TOKEN&limit=10&search=$(echo "$QUERY" | sed 's/ /+/g')"
+    curl -s "${AUTH[@]}" "$BASE/store?limit=10&search=$(echo "$QUERY" | sed 's/ /+/g')"
     ;;
   linkedin)
     # LinkedIn profile via supreme_coder (works on free plan)
     URL="$2"
-    curl -s -X POST "$BASE/acts/supreme_coder~linkedin-profile-scraper/runs?token=$TOKEN" \
+    curl -s -X POST "$BASE/acts/supreme_coder~linkedin-profile-scraper/runs?$CAPS" \
+      "${AUTH[@]}" \
       -H "Content-Type: application/json" \
       -d "{\"urls\":[{\"url\":\"$URL\"}]}"
     ;;
   instagram)
     # Instagram profile scraper
     USERNAME="$2"
-    curl -s -X POST "$BASE/acts/apify~instagram-profile-scraper/runs?token=$TOKEN" \
+    curl -s -X POST "$BASE/acts/apify~instagram-profile-scraper/runs?$CAPS" \
+      "${AUTH[@]}" \
       -H "Content-Type: application/json" \
       -d "{\"usernames\":[\"$USERNAME\"]}"
     ;;

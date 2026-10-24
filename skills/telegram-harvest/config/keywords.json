@@ -1,0 +1,20 @@
+{
+  "account_types": {
+    "AdSense": ["adsense", "ad sense", "адсенс", "google adsense", "gg adsense", "adsense账号", "tài khoản adsense"],
+    "AdMob": ["admob", "ad mob", "ад моб", "admob账号", "tài khoản admob"],
+    "Ad Manager": ["ad manager", "admanager", "adx", "google ad manager", "gam账号", "quản lý quảng cáo"],
+    "YouTube Partner": ["youtube partner", "yt partner", "ypp", "ютуб партнёрк", "ютуб партнерк", "youtube monet", "油管", "kênh youtube kiếm tiền"]
+  },
+  "flags": {
+    "Verified": ["verified", "верифиц", "подтвержд", "đã xác minh", "已验证", "kyc passed", "kyc"],
+    "Farmed": ["self-farm", "self farm", "farmed", "ферма", "фарм", "养号", "自养", "nuôi"],
+    "Payment Attached": ["payment attached", "billing attached", "card attached", "привязана карта", "привязка карты", "绑卡", "有卡", "có thẻ"],
+    "PIN": ["no pin", "without pin", "pin verified", "pin passed", "pin ok", "pin gpn", "mã pin", "пин", "pin"]
+  },
+  "quantity_terms": ["in stock", "stock", "available", "qty", "pcs", "штук", "在库", "现货", "còn"],
+  "payment_methods": ["paypal", "payoneer", "wise", "visa", "mastercard", "usdt", "btc", "crypto", "wire", "alipay", "wechat", "webmoney", "qiwi", "capitalist"],
+  "transfer_terms": ["email:pass", "email and password", "with email", "full access", "session+json", "tdata", "cookie", "session", "login", "с почтой", "почта", "мыло"],
+  "spend_terms": ["spend", "spent", "turnover", "оборот", "limit", "лимит", "chi tiêu", "消费"],
+  "history_terms": ["with history", "с историей", "история", "hoạt động", "有历史", "history"],
+  "age_terms": ["aged", "old account", "старый", "老号", "năm tuổi"]
+}

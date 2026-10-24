@@ -1,0 +1,120 @@
+# Optional OSINT services for Investigators Copilot. Every service is behind a profile, so a bare
+# `docker compose up` starts NOTHING. Start what you need:
+#
+#   bash skills/osint/scripts/setup-tools.sh --docker crawl4ai,changedetection
+#   # equivalent: docker compose -f tools/docker-compose.yml --profile crawl4ai up -d
+#
+# All ports bind to 127.0.0.1 only. Point the scripts at them with the env vars noted
+# per service. Image names verified 2026-10-10 against Docker Hub
+# (hub.docker.com/v2/repositories/<ns>/<name>/tags/<tag> -> 200) or ghcr.io manifests.
+#
+# Timesketch is NOT included (multi-service stack: postgres, opensearch, redis, nginx,
+# workers). Use its official deployment instead:
+#   https://github.com/google/timesketch/tree/master/docker
+# then: python3 skills/osint/scripts/render-timeline.py --timesketch ...
+
+services:
+  # crawl.sh primary engine. Env: CRAWL4AI_URL=http://localhost:11235 (default),
+  # optional CRAWL4AI_API_TOKEN. Verified: unclecode/crawl4ai:latest (Docker Hub).
+  crawl4ai:
+    image: unclecode/crawl4ai:latest
+    profiles: ["crawl4ai"]
+    ports:
+      - "127.0.0.1:11235:11235"
+    shm_size: "1g"
+    restart: unless-stopped
+
+  # watch.py page monitoring. Env: CHANGEDETECTION_URL=http://localhost:5000,
+  # CHANGEDETECTION_API_KEY (Settings -> API in the web UI).
+  # Verified: dgtlmoon/changedetection.io:latest (Docker Hub).
+  changedetection:
+    image: dgtlmoon/changedetection.io:latest
+    profiles: ["changedetection"]
+    ports:
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - changedetection-data:/datastore
+    restart: unless-stopped
+
+  # capture-evidence.sh --archivebox (additive copy, never flips an EV item status).
+  # Env: ARCHIVEBOX_URL=http://localhost:8010, ARCHIVEBOX_API_KEY.
+  # Host port 8010 avoids yente on 8000. Verified: archivebox/archivebox:stable (Docker Hub).
+  # First run: docker compose ... run --rm archivebox manage createsuperuser
+  archivebox:
+    image: archivebox/archivebox:stable
+    profiles: ["archivebox"]
+    command: server --quick-init 0.0.0.0:8000
+    ports:
+      - "127.0.0.1:8010:8000"
+    environment:
+      - PUBLIC_INDEX=False
+      - PUBLIC_SNAPSHOTS=False
+      - PUBLIC_ADD_VIEW=False
+    volumes:
+      - archivebox-data:/data
+    restart: unless-stopped
+
+  # Adapter `spiderfoot` (REST mode). Env: SPIDERFOOT_URL=http://localhost:5001.
+  # No official Docker Hub image exists (smicallef/spiderfoot -> 404); the upstream
+  # compose builds from source, so this builds from the upstream git repo.
+  # (Third-party image ctdc/spiderfoot exists but is unverified provenance -- not used.)
+  spiderfoot:
+    build:
+      context: https://github.com/smicallef/spiderfoot.git
+    image: spiderfoot-local
+    profiles: ["spiderfoot"]
+    ports:
+      - "127.0.0.1:5001:5001"
+    volumes:
+      - spiderfoot-data:/var/lib/spiderfoot
+    restart: unless-stopped
+
+  # Adapter `opensanctions` local mode. Env: YENTE_URL=http://localhost:8000.
+  # Shape follows github.com/opensanctions/yente docker-compose.yml (fetched 2026-10-10).
+  # Verified: ghcr.io/opensanctions/yente:5.5.0 (ghcr manifest 200). The elasticsearch
+  # image/tag is copied from that upstream compose, not independently verified.
+  # Needs ~4 GB RAM; first start indexes the data (minutes).
+  # Manifest: civic.yml is non-commercial use. client work is commercial:
+  # use commercial.yml + OPENSANCTIONS_DELIVERY_TOKEN, or the hosted API key instead.
+  yente-index:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.2
+    profiles: ["yente"]
+    environment:
+      - node.name=index
+      - cluster.name=opensanctions-index
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms4g -Xmx4g"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - yente-index-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+
+  yente:
+    image: ghcr.io/opensanctions/yente:5.5.0
+    profiles: ["yente"]
+    depends_on:
+      yente-index:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      YENTE_INDEX_TYPE: "elasticsearch"
+      YENTE_INDEX_URL: http://yente-index:9200
+      YENTE_MANIFEST: ${YENTE_MANIFEST:-/app/manifests/commercial.yml}
+      OPENSANCTIONS_DELIVERY_TOKEN: ${OPENSANCTIONS_DELIVERY_TOKEN:-}
+    restart: unless-stopped
+
+volumes:
+  changedetection-data:
+  archivebox-data:
+  spiderfoot-data:
+  yente-index-data:

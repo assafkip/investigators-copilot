@@ -1,6 +1,8 @@
-Capture full-page PDF screenshots of all URLs referenced in a report or brief.
+Capture every URL referenced in a report or brief as a chain-of-custody evidence item (EV-NNNN).
 
 Arguments: $ARGUMENTS (path to the target file, or omit to use the most recent file in the active case's output/)
+
+**Active case:** read the case folder name from the first line of `.active-case`. If it is missing or empty, ask the founder which case to use.
 
 ## Steps
 
@@ -10,21 +12,17 @@ Arguments: $ARGUMENTS (path to the target file, or omit to use the most recent f
    - Skip internal file paths
    - Skip mailto: links
    - Skip URLs that are clearly API endpoints (not human-readable pages)
-4. For each URL, use Chrome MCP to:
-   - Navigate to the URL
-   - Wait for page load
-   - Use the GO FULL PAGE Chrome extension to capture a full-page screenshot
-   - Save as PDF to `screenshots/` subfolder in the same directory as the target file
-5. Name files descriptively: `screenshot-{domain}-{slug}.pdf`
+   - Skip URLs already captured (an EV item whose `source.json` has that `source_url`)
+4. Write a batch file, one line per URL: `<url>\t<slug>\t[platform]\t[account]\t[note]`
+5. Run: `bash skills/osint/scripts/capture-evidence.sh --batch <file> --case <case>`
+   - Per-URL extras (single-URL form): `--social` downloads post media into the same EV item; `--archivebox` adds an ArchiveBox copy. Both are additive and never change the item's status.
+6. Replace raw URLs in the report with `[EV-NNNN]` citations, then render: `python3 skills/osint/scripts/render-report.py <in.md> <out.md>`
 
 ## Output
 
-- Create a `screenshots/` directory alongside the report with all captured PDFs
-- Add an appendix section to the report listing each screenshot with its source URL
+- EV-NNNN folders under `investigations/<case>/investigation/evidence/items/` (capture.pdf, capture.png, source.json, chain-of-custody.md, content.md)
+- The report cites evidence by ID. No `screenshots/` dump folder and no GO FULL PAGE extension (deprecated by `.claude/rules/evidence-capture-protocol.md`).
 
-## Fallback
+## Failure
 
-If Chrome MCP is unavailable or a page fails to load:
-- Log the failed URL
-- Continue with remaining URLs
-- Note failures in the appendix
+The batch fail-stops on the first INCOMPLETE item (login wall, paywall, 404, render failure). Stop and tell the founder which URL and why; an INCOMPLETE item is never cited.

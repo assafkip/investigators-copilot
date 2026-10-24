@@ -29,7 +29,7 @@ Flags combine: `/analyze --guided --no-osint` is valid.
 
 ## Q Investigation System Integration
 
-This skill is integrated into the huntkit investigation system.
+This skill is integrated into the Investigators Copilot investigation system.
 
 ### Output Path Override
 

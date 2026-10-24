@@ -1,6 +1,6 @@
 # Q Investigation System -- Commands
 
-Last updated: 2026-04-03
+Last updated: 2026-10-10
 
 ---
 
@@ -55,13 +55,19 @@ Last updated: 2026-04-03
 
 ## /q-screenshots -- Capture Evidence Screenshots
 
-**Purpose:** Full-page PDF screenshots of all URLs referenced in a report or brief.
+**Purpose:** Capture every URL referenced in a report or brief as a chain-of-custody evidence item.
 
 **Steps:**
-1. Extract all URLs from the target file
-2. Capture full-page PDFs using GO FULL PAGE Chrome extension
-3. Save to `screenshots/` subfolder alongside the report
-4. Add appendix listing screenshots with source URLs
+1. Extract all URLs from the target file (skip mailto:, internal paths, API endpoints)
+2. Skip URLs already captured (an EV item whose `source.json` has that `source_url`)
+3. Write a batch file (`<url>\t<slug>\t[platform]\t[account]\t[note]` per line) and run
+   `bash skills/osint/scripts/capture-evidence.sh --batch <file> --case <case>`
+   (add `--social` per item for post media, `--archivebox` for an extra ArchiveBox copy; both additive)
+4. Replace the raw URLs in the report with `[EV-NNNN]` citations; `render-report.py` renders them
+5. An INCOMPLETE item (login wall, paywall, 404) is not cited: stop and tell the founder (fail-stop)
+
+No `screenshots/` dump folder and no GO FULL PAGE extension: that pattern is deprecated by
+`.claude/rules/evidence-capture-protocol.md`.
 
 ---
 
@@ -74,7 +80,8 @@ Last updated: 2026-04-03
 2. For each hypothesis, argue the opposite
 3. Rate each as STRONG / MODERATE / WEAK
 4. For MODERATE/WEAK: what evidence would upgrade it? What's the simplest alternative?
-5. Write to findings/REALITY-CHECK-YYYY-MM-DD.md
+5. Optional, for a draft brief/report: `python3 skills/osint/scripts/validate-citations.py <brief.md> --case <case>` -- dead links and citing sentences whose hard tokens are missing from the captured EV item become WEAK candidates
+6. Write to findings/REALITY-CHECK-YYYY-MM-DD.md
 
 ---
 
@@ -128,6 +135,14 @@ instead of writing a classifier from scratch -- it's the shared scaffold two
 prior cases independently reinvented. `evidence-pipeline-guard.py` blocks
 skipping the ingest/extract step for any script written under a case's
 `investigation/evidence/scripts/`.
+
+**Side files from `extract-intake.py`** (per document, under `evidence/extracted/<stem>/`):
+`iocs.json` (domains, IPs, emails, wallets, hashes), `entities.json`, `exif.json`. All are
+T3 leads, not findings. Optional model NER: `--ner gliner` (local) or `--ner spacy`;
+`--ner langextract` SENDS TEXT TO GEMINI and needs founder approval for client documents.
+Follow-ups: `resolve-entities.py <csv> --out same_as.csv [--ftm out.jsonl]` (dedupe people/orgs
+across sources); `ioc-reputation.py extracted/<doc>/iocs.json` (reputation leads only, and it
+discloses the indicators to the providers queried).
 
 ---
 
@@ -212,8 +227,9 @@ bash skills/osint/scripts/run-actor.sh "actor/id" '{"input":"json"}'
 **Escalation:** Level 1 (free, fast) -> Level 2 (source verify) -> Level 3 (social scrape) -> Level 4 (deep research, ~$0.50)
 
 **Additional sources (manual/CLI):**
-- Domain/WHOIS: `whois`, `dig`, `nslookup`
-- Web archives: Wayback Machine API
+- Domain/WHOIS/DNS/CT records (T1, keyless): `python3 skills/osint/scripts/osint-tool.py rdap|doh|crtsh|certspotter <domain>`; `whois`, `dig` as fallback
+- Any adapter: `python3 skills/osint/scripts/osint-tool.py --list` (54 adapters, each result tagged T1/T3)
+- Web archives: Wayback CDX is research-only (not part of capture; cite only EV items)
 - Google dorking: search operators via browser
 - DNS/IP: `dig`, `nslookup`, Shodan
 - Public records: platform-specific
@@ -248,7 +264,9 @@ Any account found via platform collection is T3 (hypothesis only) until crosslin
 - Personal profiles: `bash skills/osint/scripts/brightdata.sh scrape "<url>"` (only Bright Data works)
 
 **Reddit:** `/q-osint reddit [username]`
-- Pull post/comment history via JSON API or Apify
+- Pull post/comment history: `python3 skills/osint/scripts/reddit-arctic.py user <username> --case <case>`
+  (Arctic Shift archive, then PullPush, then Reddit RSS; also MCP `osint-infra` tool `reddit_user_history`).
+  Do NOT use reddit.com JSON: it returns 403 from servers. Arctic Shift also keeps deleted posts.
 - Map active subreddits and topics
 - Identify behavioral patterns, posting times
 - Cross-reference usernames and language patterns
@@ -266,15 +284,21 @@ Any account found via platform collection is T3 (hypothesis only) until crosslin
 - `bash skills/osint/scripts/run-actor.sh "streamers/youtube-channel-scraper" '...'`
 
 **Domain:** `/q-osint domain [domain.com]`
-- WHOIS lookup (`whois domain.com`)
-- DNS records: `dig domain.com ANY`
-- Subdomain enumeration
-- Historical records: Wayback Machine
-- SSL certificate transparency logs
+- Registration record (T1): `python3 skills/osint/scripts/osint-tool.py rdap domain.com --case <case>` (or `whois domain.com`)
+- DNS (T1): `osint-tool.py doh domain.com`, mail posture `osint-tool.py dns_deep domain.com`
+- Certificate transparency / subdomains (T1): `osint-tool.py crtsh domain.com`, `osint-tool.py certspotter domain.com`
+- Hosting: `osint-tool.py asn <ip>`, `osint-tool.py shodan <ip>` (InternetDB keyless), `osint-tool.py reverse_ip <ip>` (T3)
+- Lookalikes: `osint-tool.py typosquat domain.com` (dnstwist); tech: `osint-tool.py wappalyzer domain.com`
+- Historical pages: Wayback is research-only (not submitted, not citable); capture the live page with `capture-evidence.sh`
+
+**Identity sweep:** `/q-osint username|email|phone [value]`
+- `python3 skills/osint/scripts/identity-sweep.py <handle|email|phone> --case <case>` -- every ready identity adapter (username/WhatsMyName, maigret, sherlock, holehe, gravatar, github/gitlab/npm/hn, phone, telegram_phone, xposedornot ...), merged, all T3
+- Shortcut: `bash skills/osint/scripts/identity-lookup.sh sweep <value> [case]`
+- Feed the saved `urls.tsv` to `capture-evidence.sh --batch` before citing anything
 
 **Email:** `/q-osint email [address]`
-- Check known breach databases (HIBP)
-- Identify associated accounts/platforms
+- Check known breach databases (HIBP); `osint-tool.py xposedornot <email>`
+- Identify associated accounts/platforms (`identity-sweep.py <email>`)
 - Domain analysis for custom domains
 - Contact enrichment: `bash skills/osint/scripts/run-actor.sh "vdrmota/contact-info-scraper" '{"urls":["site.com"]}'`
 
@@ -301,6 +325,8 @@ Any account found via platform collection is T3 (hypothesis only) until crosslin
 
 **Rules:**
 - Always use Apify or API tools before Chrome
+- Social posts: `capture-evidence.sh <url> <slug> --social` also downloads the post media into the same EV item (additive, never flips status)
+- Every `osint-tool.py` / `enrich` result carries its tier; reputation, username and scraped-profile hits are T3 and never crosslinks
 - Log all collection to `investigation/evidence/`
 - Tag source reliability (A-F scale)
 - Never exceed ethical/legal boundaries defined in scope
@@ -391,7 +417,7 @@ If any gate fails, tell the founder which gate is missing and what to run. Do no
    - **Collection gaps:** What we still need
    - **Hypotheses status:** Which are supported/refuted/undetermined
    - **Recommended next steps:** Prioritized by impact, tagged with Energy + Time Est
-3. **PDF screenshot pass:** Compile all URLs referenced in the brief. Capture full-page PDF of each using GO FULL PAGE Chrome extension. Save to `output/briefs/screenshots/`.
+3. **Evidence pass:** Every URL the brief relies on must be an `[EV-NNNN]` item. Capture missing ones with `capture-evidence.sh --batch <file> --case <case>` (see /q-screenshots), then render with `render-report.py <brief.md> <out.md>` (fails on a broken citation).
 4. Save to `output/briefs/brief-YYYY-MM-DD.md`
 5. Present to founder
 
@@ -443,17 +469,20 @@ If any gate fails, tell the founder which gate is missing and what to run. Do no
 
 **Purpose:** Export investigation data in a structured format.
 
-**Formats:** markdown, json, timeline-html
+**Formats:** markdown, json, timeline-html, stix, misp, csv, map. Flag: `--redact`.
 
 **Steps:**
 1. Gather all investigation files, including `output/analyses/` (structured analysis reports, technique artifacts, evidence registries)
 2. Export in requested format:
    - **markdown:** Full investigation report, with structured analysis appendix (technique outputs, ACH matrices, key assumptions)
    - **json:** Structured data (targets, findings, links, timeline, analysis summaries)
-   - **timeline-html:** Interactive timeline visualization
-3. **PDF screenshot pass:** Compile all URLs referenced in the report and appendix. Capture full-page PDF of each using GO FULL PAGE Chrome extension. Save to `output/exports/screenshots/`.
-4. Save to `output/exports/`
-5. Present to founder
+   - **timeline-html:** `python3 skills/osint/scripts/render-timeline.py --case <case>` (`--timesketch` adds a Timesketch import CSV)
+   - **stix | misp | csv:** `python3 skills/osint/scripts/export-intel.py stix|misp|csv|all --case <case> [--tlp clear|green|amber|red]`
+   - **map:** `python3 skills/osint/scripts/render-map.py --case <case>` (EXIF/analyst points, not verified locations)
+3. **Evidence pass:** Every URL in the report and appendix must be an `[EV-NNNN]` item (capture missing ones via `capture-evidence.sh --batch`, see /q-screenshots); render markdown with `render-report.py`.
+4. **`--redact`:** `python3 skills/osint/scripts/redact-pii.py <export.md>` writes `<stem>.redacted.md` next to it (presidio if installed, else regex). Share the redacted copy; keep the original in the case.
+5. Save to `output/exports/`
+6. Present to founder
 
 ---
 
@@ -549,7 +578,7 @@ If any gate fails, tell the founder which gate is missing and what to run. Do no
      --case <case-slug> --gender male
    ```
    - Phase 1: deepface detects + crops all faces, classifies gender, isolates target
-   - Phase 2: Search4faces API + Yandex (Selenium) + Bing Visual Search (Selenium) + FaceCheck.ID API
+   - Phase 2: Search4faces API + Yandex (Selenium) + Bing Visual Search (Selenium) + FaceCheck.ID API + Google Cloud Vision web detection (when `GOOGLE_VISION_API_KEY` is set)
    - Phase 3: Downloads top 5 candidate profile photos, runs deepface ArcFace comparison, ranks by score
    - Phase 4: Routes top 10 hit URLs through `capture-evidence.sh` for chain of custody
 2. Review ranked candidates output -- DEEPFACE MATCH entries are highest confidence
@@ -574,6 +603,7 @@ python3 skills/osint/scripts/face-search.py --setup
 **API keys (optional -- pipeline runs without them, more engines = better coverage):**
 - `SEARCH4FACES_API_KEY` -- 500M+ VK/OK.ru/TikTok profiles
 - `FACECHECK_API_KEY` -- FaceCheck.ID paid API (Selenium fallback if absent)
+- `GOOGLE_VISION_API_KEY` -- Cloud Vision WEB_DETECTION backend (pages with matching images; page matches, not identities). Standalone: `bash skills/osint/scripts/reverse-image.sh <image> --case <case>`
 
 **Identity rule:**
 - Q presents ranked candidates. Founder makes the identity call.
@@ -581,3 +611,27 @@ python3 skills/osint/scripts/face-search.py --setup
 - deepface score is supporting evidence -- not identification by itself.
 
 **Venv:** `skills/osint/face-env/` (Python 3.12 + deepface + tensorflow + selenium)
+
+---
+
+## /q-watch [add|remove|list|poll] -- Monitor URLs for Changes
+
+**Purpose:** Watch case URLs/profiles and route every change into the evidence chain. Full steps: `.claude/commands/q-watch.md`.
+
+**Steps:**
+1. `python3 skills/osint/scripts/watch.py add "<url>" --label "<label>"` (also `list`, `remove`)
+2. `watch.py poll` (report) or `watch.py poll --capture` (changed URLs -> `capture-evidence.sh --batch`); bounded by `--max` / `--deadline`
+3. Backend: local SHA-256 diff, or changedetection.io when `CHANGEDETECTION_URL` + `CHANGEDETECTION_API_KEY` are set (`setup-tools.sh --docker changedetection`)
+4. A change is a T3 lead; only the EV item created by `--capture` is citable
+
+---
+
+## /q-corp [subject] -- Public-Records Sweep
+
+**Purpose:** Company/person public records (SEC EDGAR, Form D, UK Companies House, FEC, LDA lobbying, FAA registry, EU tenders). Full steps: `.claude/commands/q-corp.md`.
+
+**Steps:**
+1. `bash skills/osint/scripts/install-pp.sh list` (install missing CLIs with `install-pp.sh install [name ...]`, needs Go)
+2. Run each source through the saving wrapper: `bash install-pp.sh run <name> --case <case> -- <cli args>`
+3. Keyless registry adapters alongside: `osint-tool.py gleif "<name>"`, `osint-tool.py opencorporates "<name>"` (key), `osint-tool.py courtlistener "<name>"`, `osint-tool.py ofac "<name>"`
+4. A registry record is T1 for "this record says X"; capture any record page you will cite with `capture-evidence.sh`

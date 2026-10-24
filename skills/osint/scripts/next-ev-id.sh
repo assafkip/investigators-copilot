@@ -14,21 +14,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 WORKSPACE="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
-CASE="${1:-}"
-if [ -z "$CASE" ]; then
-  if [ -f "$WORKSPACE/.active-case" ]; then
-    CASE=$(head -1 "$WORKSPACE/.active-case" | tr -d '[:space:]')
-  else
-    echo "ERROR: no active case set and no case argument given" >&2
-    exit 1
-  fi
-fi
-
-CASE_DIR="$WORKSPACE/investigations/$CASE"
-if [ ! -d "$CASE_DIR" ]; then
-  echo "ERROR: case directory not found: $CASE_DIR" >&2
-  exit 1
-fi
+# shellcheck source=lib/active_case.sh
+source "$SCRIPT_DIR/lib/active_case.sh"
+resolve_case_dir "${1:-}" || exit 1
 
 ITEMS_DIR="$CASE_DIR/investigation/evidence/items"
 mkdir -p "$ITEMS_DIR"

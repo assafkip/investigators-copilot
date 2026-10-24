@@ -24,13 +24,15 @@
 
 | Tier | Source | Can be cited in report? |
 |------|--------|------------------------|
-| T1 | Paid database (IDI, IRBsearch), court filing, government record, SSN crosslink | Yes |
-| T2 | Live page independently fetched AND crosslinked to a T1 identifier (phone in DB, email in DB, shared SSN) | Yes, with label |
+| T1 | Paid database (IDI, IRBsearch), court filing, government record, SSN crosslink, business/company registry (OpenCorporates, GLEIF, Companies House), domain registry (WHOIS/RDAP), DNS, certificate transparency, on-chain transaction record, court record (CourtListener/RECAP) | Yes |
+| T2 | Live page independently fetched AND crosslinked to a T1 identifier (phone or email in a T1 source, shared SSN, registrant or wallet in a registry/on-chain record) | Yes, with label |
 | T3 | Automated tool output only (Skopenow social scrape, name search, IDCrawl) | No -- hypothesis queue only |
 
 **Account attribution requires 2 independent T1/T2 crosslinks minimum.** A name match alone is 0 crosslinks. A phone number found on a public website that does not appear in any T1 source is 0 crosslinks. T3 findings go into a hypothesis list, not into findings files, until independently verified.
 
-**Phone numbers and emails used as identity anchors must appear in a T1 source.** Before using a phone or email to link an account to the subject, grep the paid database text extracts for that identifier. If it is not there, it cannot be used as a crosslink.
+Reputation feeds, username hits, face-search hits and scraped profiles are T3 and never count as crosslinks. Every osint-tool.py / enrich result carries its tier.
+
+**Phone numbers and emails used as identity anchors must appear in a T1 source.** Before using a phone or email to link an account to the subject, grep the T1 sources for that identifier (paid database text extracts, registry / WHOIS / RDAP records). If it is not there, it cannot be used as a crosslink.
 
 ## Gate 1: /q-challenge -- BLOCKING before findings are written (NON-NEGOTIABLE)
 

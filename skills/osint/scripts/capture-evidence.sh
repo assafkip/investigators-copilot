@@ -10,6 +10,7 @@
 # Usage:
 #   capture-evidence.sh <url> <slug> [--case <case-folder>] [--account <@handle>]
 #                                    [--platform <name>] [--note "text"]
+#                                    [--social] [--archivebox]
 #   capture-evidence.sh --batch <file> [--case <case-folder>]
 #
 # Batch file format (one item per line, tab-separated):
@@ -21,6 +22,19 @@
 # Examples:
 #   capture-evidence.sh "https://x.com/DataRepublican/status/123" "datarepublican-origin-thread"
 #   capture-evidence.sh --batch /tmp/osint-.../urls.tsv
+#
+# Optional media backends (additive; default behaviour unchanged without the flags):
+#   --social      after the normal capture, download the post's media into the
+#                 same EV item (media/) with yt-dlp, gallery-dl and/or bellingcat
+#                 auto-archiver (whichever are installed), hash every file into
+#                 media-manifest.json and note it in content.md.
+#                 auto-archiver runs only when $AUTO_ARCHIVER_CONFIG points at its
+#                 orchestration.yaml (it is configured, not flag-driven).
+#   --archivebox  also submit the URL to a self-hosted ArchiveBox
+#                 ($ARCHIVEBOX_URL, optional $ARCHIVEBOX_API_KEY); the response is
+#                 kept as media/archivebox.json.
+#   Neither step can flip a COMPLETE item to INCOMPLETE, and neither edits
+#   source.json (chain of custody stays immutable).
 #
 # Requires: curl, jq, shasum, Google Chrome (macOS)
 
@@ -91,34 +105,29 @@ CASE=""
 ACCOUNT=""
 PLATFORM=""
 NOTE=""
+SOCIAL=0
+ARCHIVEBOX=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --case) CASE="$2"; shift 2 ;;
     --account) ACCOUNT="$2"; shift 2 ;;
     --platform) PLATFORM="$2"; shift 2 ;;
     --note) NOTE="$2"; shift 2 ;;
+    --social) SOCIAL=1; shift ;;
+    --archivebox) ARCHIVEBOX=1; shift ;;
     *) echo "ERROR: unknown argument: $1" >&2; exit 1 ;;
   esac
 done
 
-if [ -z "$CASE" ]; then
-  if [ -f "$WORKSPACE/.active-case" ]; then
-    CASE=$(head -1 "$WORKSPACE/.active-case" | tr -d '[:space:]')
-  else
-    echo "ERROR: no active case set and --case not given" >&2
-    exit 1
-  fi
-fi
-
-CASE_DIR="$WORKSPACE/investigations/$CASE"
-if [ ! -d "$CASE_DIR" ]; then
-  echo "ERROR: case directory not found: $CASE_DIR" >&2
-  exit 1
-fi
+# shellcheck source=lib/active_case.sh
+source "$SCRIPT_DIR/lib/active_case.sh"
+resolve_case_dir "$CASE" || exit 1
 
 # ---------- Assign EV-NNNN ID ----------
 
-EV_ID=$("$SCRIPT_DIR/next-ev-id.sh" "$CASE")
+# CASE_DIR, not CASE: for a case outside investigations/ CASE is only the
+# folder name and next-ev-id.sh would resolve it under investigations/ (ASK-2617).
+EV_ID=$("$SCRIPT_DIR/next-ev-id.sh" "$CASE_DIR")
 ITEM_DIR="$CASE_DIR/investigation/evidence/items/${EV_ID}-${SLUG}"
 mkdir -p "$ITEM_DIR"
 
@@ -153,7 +162,7 @@ echo "[2/4] archive.today: SKIPPED (local-only mode)"
 
 # ---------- Step 3: Chrome headless PDF ----------
 
-CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+CHROME="${CHROME_BIN:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
 CHROME_TIMEOUT_SEC="${CHROME_TIMEOUT_SEC:-45}"
 
 # run_with_timeout <seconds> <cmd...> -- uses perl alarm since macOS lacks GNU timeout
@@ -350,6 +359,155 @@ cat > "$ITEM_DIR/content.md" <<EOF
 - Engagement (likes/reposts/replies):
 - Author display name:
 EOF
+
+# ---------- Step 7: carve artifacts (strings / QR / EXIF) -- additive, never fail-stop ----------
+# Carving is ENRICHMENT, not chain-of-custody: each tool is optional and wrapped in `|| true`
+# so a missing binary OR a no-QR image (zbarimg exits non-zero when it finds nothing) cannot
+# abort the capture under `set -euo pipefail`. Findings APPEND into content.md; source.json
+# stays immutable; a COMPLETE capture is never flipped to INCOMPLETE by carving.
+# Optional binaries: brew install exiftool zbar  (Linux: apt install libimage-exiftool-perl zbar-tools)
+# Ported 2026-10-10 from kipi-investigations capture-evidence.sh.
+{
+  echo ""
+  echo "## Carved artifacts (strings / QR / EXIF)"
+  echo ""
+  CARVE_TARGETS=()
+  [ -s "${PNG_PATH:-}" ] && CARVE_TARGETS+=("$PNG_PATH")
+  [ -s "${PDF_PATH:-}" ] && CARVE_TARGETS+=("$PDF_PATH")
+  if [ "${#CARVE_TARGETS[@]}" -gt 0 ]; then
+    for f in "${CARVE_TARGETS[@]}"; do
+      base=$(basename "$f")
+      if command -v zbarimg >/dev/null 2>&1; then
+        qr=$(zbarimg --quiet --raw "$f" 2>/dev/null || true)
+        [ -n "$qr" ] && echo "- QR/barcode in $base: \`$qr\`" || true
+      else
+        echo "- (zbarimg not installed -- QR decode skipped for $base; brew install zbar)"
+      fi
+      if command -v exiftool >/dev/null 2>&1; then
+        gps=$(exiftool -s3 -GPSPosition "$f" 2>/dev/null || true)
+        [ -n "$gps" ] && echo "- EXIF GPS in $base: $gps" || true
+      else
+        echo "- (exiftool not installed -- EXIF skipped for $base; brew install exiftool)"
+      fi
+      if command -v strings >/dev/null 2>&1; then
+        hits=$(strings -n 8 "$f" 2>/dev/null | grep -aoiE '(0x[a-f0-9]{40}|bc1[a-z0-9]{20,}|https?://[^ ]+|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})' 2>/dev/null | sort -u | head -20 || true)
+        [ -n "$hits" ] && { echo "- Strings hits in $base:"; echo "$hits" | sed 's/^/  - /'; } || true
+      fi
+    done
+  else
+    echo "- (no capture.png / capture.pdf to carve)"
+  fi
+} >> "$ITEM_DIR/content.md" 2>/dev/null || true
+
+# ---------- Step 8: social media / ArchiveBox backends -- additive, never fail-stop ----------
+# Added 2026-10-10 (Phase 6). Runs only with --social / --archivebox. Like carving,
+# this is ENRICHMENT: every command is wrapped so a missing tool, a private post or
+# a network error cannot abort the script, and OVERALL is never recomputed here,
+# so a COMPLETE item stays COMPLETE. Media hashes live in media-manifest.json, not
+# source.json, because source.json is immutable after capture.
+SOCIAL_TIMEOUT_SEC="${SOCIAL_TIMEOUT_SEC:-300}"
+
+sha256_file() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    sha256sum "$1" | awk '{print $1}'
+  fi
+}
+
+write_media_manifest() {
+  local media_dir="$1" backends="$2" manifest="$ITEM_DIR/media-manifest.json"
+  local entries="[]" rel sha size
+  while IFS= read -r -d '' f; do
+    rel="${f#"$ITEM_DIR"/}"
+    sha=$(sha256_file "$f")
+    size=$(wc -c < "$f" | tr -d ' ')
+    entries=$(jq --arg p "$rel" --arg s "$sha" --argjson b "$size" \
+      '. + [{path: $p, sha256: $s, bytes: $b}]' <<<"$entries")
+  done < <(find "$media_dir" -type f -print0 2>/dev/null | sort -z)
+  jq -n --arg ev "$EV_ID" --arg url "$URL" --arg ts "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+    --arg backends "$backends" --argjson files "$entries" \
+    '{ev_id: $ev, source_url: $url, generated_utc: $ts,
+      backends: ($backends | split(",") | map(select(length > 0))),
+      files: $files}' > "$manifest"
+  jq '.files | length' "$manifest"
+}
+
+if [ "$SOCIAL" = "1" ] || [ "$ARCHIVEBOX" = "1" ]; then
+  MEDIA_DIR="$ITEM_DIR/media"
+  mkdir -p "$MEDIA_DIR"
+  BACKENDS_RUN=""
+  SOCIAL_NOTES=()
+  echo "[8] Media backends..."
+
+  if [ "$SOCIAL" = "1" ]; then
+    if command -v yt-dlp >/dev/null 2>&1; then
+      run_with_timeout "$SOCIAL_TIMEOUT_SEC" yt-dlp --no-playlist --no-progress \
+        --write-info-json --restrict-filenames \
+        -o "$MEDIA_DIR/yt-dlp/%(extractor)s-%(id)s.%(ext)s" "$URL" >/dev/null 2>&1 \
+        && SOCIAL_NOTES+=("yt-dlp: downloaded") \
+        || SOCIAL_NOTES+=("yt-dlp: no media or failed (not an error for the capture)")
+      BACKENDS_RUN="$BACKENDS_RUN,yt-dlp"
+    else
+      SOCIAL_NOTES+=("yt-dlp: not installed (pipx install yt-dlp)")
+    fi
+    if command -v gallery-dl >/dev/null 2>&1; then
+      run_with_timeout "$SOCIAL_TIMEOUT_SEC" gallery-dl --write-metadata \
+        -D "$MEDIA_DIR/gallery-dl" "$URL" >/dev/null 2>&1 \
+        && SOCIAL_NOTES+=("gallery-dl: downloaded") \
+        || SOCIAL_NOTES+=("gallery-dl: no media or failed (not an error for the capture)")
+      BACKENDS_RUN="$BACKENDS_RUN,gallery-dl"
+    else
+      SOCIAL_NOTES+=("gallery-dl: not installed (pipx install gallery-dl)")
+    fi
+    if command -v auto-archiver >/dev/null 2>&1 && [ -n "${AUTO_ARCHIVER_CONFIG:-}" ] \
+       && [ -f "${AUTO_ARCHIVER_CONFIG}" ]; then
+      mkdir -p "$MEDIA_DIR/auto-archiver"
+      # Absolute before the cd: a relative config path passed the -f check above and
+      # then broke inside media/auto-archiver (post-merge review, ASK-2613).
+      AA_CONFIG="$(cd "$(dirname "$AUTO_ARCHIVER_CONFIG")" && pwd)/$(basename "$AUTO_ARCHIVER_CONFIG")"
+      ( cd "$MEDIA_DIR/auto-archiver" && run_with_timeout "$SOCIAL_TIMEOUT_SEC" \
+          auto-archiver --config "$AA_CONFIG" "$URL" > auto-archiver.log 2>&1 ) \
+        && SOCIAL_NOTES+=("auto-archiver: ran (see media/auto-archiver/auto-archiver.log; WACZ/media per your orchestration.yaml)") \
+        || SOCIAL_NOTES+=("auto-archiver: failed (see media/auto-archiver/auto-archiver.log)")
+      BACKENDS_RUN="$BACKENDS_RUN,auto-archiver"
+    else
+      SOCIAL_NOTES+=("auto-archiver: skipped (needs the auto-archiver CLI and AUTO_ARCHIVER_CONFIG=orchestration.yaml)")
+    fi
+  fi
+
+  if [ "$ARCHIVEBOX" = "1" ]; then
+    if [ -n "${ARCHIVEBOX_URL:-}" ]; then
+      AB_AUTH=()
+      [ -n "${ARCHIVEBOX_API_KEY:-}" ] && AB_AUTH=(-H "X-ArchiveBox-API-Key: ${ARCHIVEBOX_API_KEY}")
+      AB_CODE=$(curl -sS --max-time 120 -o "$MEDIA_DIR/archivebox.json" -w '%{http_code}' \
+        -H 'Content-Type: application/json' ${AB_AUTH[@]+"${AB_AUTH[@]}"} \
+        -X POST "${ARCHIVEBOX_URL%/}/api/v1/cli/add" \
+        --data "$(jq -n --arg u "$URL" --arg t "$EV_ID" '{urls: [$u], tag: $t, depth: 0, update: false}')" \
+        2>/dev/null || true)
+      AB_CODE="${AB_CODE:-000}"  # -w already prints 000 on failure; echoing another gave 000000
+      if [ "$AB_CODE" = "200" ]; then
+        SOCIAL_NOTES+=("archivebox: submitted to ${ARCHIVEBOX_URL} (tag $EV_ID)")
+      else
+        SOCIAL_NOTES+=("archivebox: HTTP $AB_CODE from ${ARCHIVEBOX_URL} (not an error for the capture)")
+      fi
+      BACKENDS_RUN="$BACKENDS_RUN,archivebox"
+    else
+      SOCIAL_NOTES+=("archivebox: skipped (ARCHIVEBOX_URL not set)")
+    fi
+  fi
+
+  MEDIA_COUNT=$(write_media_manifest "$MEDIA_DIR" "${BACKENDS_RUN#,}" 2>/dev/null || echo "?")
+  {
+    echo ""
+    echo "## Media archive (--social / --archivebox)"
+    echo ""
+    echo "- Files: $MEDIA_COUNT, hashed in \`media-manifest.json\` (paths relative to this item)"
+    for n in "${SOCIAL_NOTES[@]}"; do echo "- $n"; done
+    echo "- Media is enrichment; it does not change this item's overall status ($OVERALL)."
+  } >> "$ITEM_DIR/content.md" 2>/dev/null || true
+  echo "      media files: $MEDIA_COUNT (media-manifest.json)"
+fi
 
 echo ""
 echo "=== $EV_ID: $OVERALL ==="

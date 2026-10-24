@@ -13,14 +13,34 @@ For every file in a case's investigation/intake/, writes:
     ocr.md         -- tesseract OCR (multi-PSM, best-by-alnum) of every image/page
     manifest.json  -- per-file extraction stats for verification
 
-Handlers: .pdf .docx .doc .png .jpg .jpeg .tif .tiff
+    iocs.json      -- deterministic IOCs / ATT&CK ids / gazetteer hits (lib/ioc_extract.py,
+                      theia port) found in text.md + ocr.md, each with exact offsets
+    entities.json  -- emails / handles / phones / wallets / people + org candidates
+                      (lib/entity_extract.py, kipi port), each with exact offsets
+    exif.json      -- EXIF of every image under images/ + attachments/ (exiftool, else
+                      Pillow, else recorded as unavailable). Not written when no images.
+    ner.json       -- only with --ner: optional model NER (GLiNER / langextract / spaCy)
+
+Side-file offsets are Python str indices into the named source file (text.md or
+ocr.md): source[start:end] == the recorded span. Side-file failures are reported in
+the manifest and on stderr; they never fail the verbatim extraction itself.
+
+Handlers: .pdf .docx .doc .csv .eml .md .json (Telegram export / generic JSON) .xlsx
+          .png .jpg .jpeg .tif .tiff
 Requires on PATH: pdftotext, pdftoppm, tesseract. Python: python-docx + Pillow
-(only needed when DOCX/DOC/image inputs are present; imported lazily).
+(only needed when DOCX/DOC/image inputs are present; imported lazily); openpyxl for
+.xlsx (lazy; a clear FAIL row if missing). Optional: exiftool on PATH.
 
 Usage:
-  python3 extract-intake.py --case <case-folder> [--intake <dir>]
+  python3 extract-intake.py --case <case-folder> [--intake <dir>] [--ner BACKEND]
     --case    investigations/<case-folder>; defaults to <workspace>/.active-case
     --intake  override the intake dir (default: <case>/investigation/intake)
+    --ner     gliner | langextract | spacy  (optional model NER -> ner.json).
+              gliner: local model (pip install gliner; weights download once from
+              Hugging Face, model via $GLINER_MODEL). langextract: SENDS TEXT TO
+              GOOGLE GEMINI, needs $LANGEXTRACT_API_KEY or $GEMINI_API_KEY, skipped
+              otherwise. spacy: EntityRuler regex patterns (IBAN, wallets,
+              passport/ID-like) + en_core_web_sm PERSON/ORG when installed.
 
 Exit codes: 0 all files extracted; 1 setup error (no case/intake/files);
             2 one or more files failed extraction (others still processed).
@@ -28,6 +48,7 @@ Exit codes: 0 all files extracted; 1 setup error (no case/intake/files);
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -39,6 +60,10 @@ EXTRACTOR_NAME = "extract-intake.py"
 
 # workspace = workspace (script lives in skills/osint/scripts/)
 WORKSPACE = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+from active_case import resolve_case_dir  # noqa: E402
+import entity_extract  # noqa: E402
+import ioc_extract  # noqa: E402
 
 PSM_MODES = ["3", "6", "11"]
 PSM_LABELS = {
@@ -344,8 +369,373 @@ def extract_md(path: Path, out: Path) -> dict:
     return {"text_chars": len(text), "images": 0}
 
 
+def _write_no_ocr(out: Path, src: Path, kind: str) -> None:
+    (out / "ocr.md").write_text(f"# {src.name} -- OCR\n\n_({kind} -- no images to OCR)_\n",
+                                encoding="utf-8")
+
+
+# ---------- Telegram / generic JSON (port of kipi ingest/telegram.py) ----------
+
+TELEGRAM_META_KEYS = ("date", "from", "from_id", "author", "sender", "username")
+
+
+def _telegram_msg(item) -> str:
+    if not isinstance(item, dict):
+        return str(item)
+    parts = [f"{key}={item[key]}" for key in TELEGRAM_META_KEYS if item.get(key)]
+    text = item.get("text") or item.get("message") or item.get("content") or ""
+    if isinstance(text, list):
+        # Telegram splits one message into contiguous text/entity parts; join with ""
+        # so the message stays verbatim (kipi joined with " ", inserting spaces).
+        text = "".join((t.get("text", "") if isinstance(t, dict) else str(t)) for t in text)
+    if parts or text:
+        prefix = f"[{' '.join(parts)}] " if parts else ""
+        return f"{prefix}{text}".strip()
+    return ""
+
+
+def telegram_text(data) -> tuple:
+    """Return (text, message_count). Native channel export ({name, messages: [...]}),
+    kipi harvest list, or a single message dict."""
+    msgs = []
+    count = 0
+    if isinstance(data, list):
+        msgs = [_telegram_msg(item) for item in data]
+        count = len(data)
+    elif isinstance(data, dict) and isinstance(data.get("messages"), list):
+        channel = data.get("name") or data.get("title") or "unknown_channel"
+        msgs = [f"# Channel: {channel}\n"] + [_telegram_msg(i) for i in data["messages"]]
+        count = len(data["messages"])
+    elif isinstance(data, dict):
+        msgs = [_telegram_msg(data)]
+        count = 1
+    return "\n".join(m for m in msgs if m), count
+
+
+def extract_json(path: Path, out: Path) -> dict:
+    out.mkdir(parents=True, exist_ok=True)
+    raw = path.read_text(encoding="utf-8", errors="replace")
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        write_text_md(out, path, raw, f"JSON parse failed ({exc}); raw text copied verbatim")
+        _write_no_ocr(out, path, "JSON file")
+        return {"text_chars": len(raw), "images": 0, "messages": 0}
+    text, count = telegram_text(data)
+    write_text_md(out, path, text,
+                  "JSON as Telegram-style messages (kipi telegram.py format); "
+                  "original JSON stays in intake/")
+    _write_no_ocr(out, path, "JSON file")
+    return {"text_chars": len(text), "images": 0, "messages": count}
+
+
+# ---------- XLSX (openpyxl, lazy) ----------
+
+def extract_xlsx(path: Path, out: Path) -> dict:
+    try:
+        from openpyxl import load_workbook
+    except ImportError as exc:
+        raise RuntimeError("openpyxl is not installed: pip install openpyxl") from exc
+    out.mkdir(parents=True, exist_ok=True)
+    wb = load_workbook(str(path), read_only=True, data_only=True)
+    lines = [f"# {path.name}", "", "_Extraction: XLSX rows as structured text (openpyxl)_", ""]
+    row_count = 0
+    sheets = 0
+    for ws in wb.worksheets:
+        sheets += 1
+        lines += [f"## Sheet: {ws.title}", ""]
+        headers = []
+        for i, row in enumerate(ws.iter_rows(values_only=True)):
+            cells = ["" if v is None else str(v).strip() for v in row]
+            if i == 0:
+                headers = [h or f"col{j + 1}" for j, h in enumerate(cells)]
+                continue
+            pairs = [(headers[j] if j < len(headers) else f"col{j + 1}", v)
+                     for j, v in enumerate(cells) if v]
+            if not pairs:
+                continue
+            lines += [f"### Row {i}", ""] + [f"**{k}:** {v}" for k, v in pairs] + [""]
+            row_count += 1
+    wb.close()
+    text = "\n".join(lines)
+    (out / "text.md").write_text(text, encoding="utf-8")
+    _write_no_ocr(out, path, "XLSX file")
+    return {"text_chars": len(text), "images": 0, "rows": row_count, "sheets": sheets}
+
+
+# ---------- side files: iocs.json / entities.json / exif.json / ner.json ----------
+
+SIDE_SOURCES = ("text.md", "ocr.md")
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".gif", ".webp", ".heic", ".bmp"}
+SIDE_GENERATOR = "extract-intake.py side files v1"
+
+
+def read_side_sources(out: Path) -> dict:
+    return {name: (out / name).read_text(encoding="utf-8")
+            for name in SIDE_SOURCES if (out / name).is_file()}
+
+
+def _tag(items: list, source: str) -> list:
+    return [{**it, "source_file": source} for it in items]
+
+
+def write_iocs_and_entities(out: Path, sources: dict) -> dict:
+    iocs, attack, gaz, ents = [], [], [], []
+    for name, text in sources.items():
+        res = ioc_extract.extract_all(text)
+        iocs += _tag(res["iocs"], name)
+        attack += _tag(res["attack_ids"], name)
+        for group in res["entities"].values():
+            gaz += _tag(group, name)
+        ents += _tag(entity_extract.extract_dicts(text), name)
+    header = {"generator": SIDE_GENERATOR, "offset_unit": "python str index (code point)",
+              "sources": sorted(sources), "evidence_tier": "T3 (automated extraction)"}
+    (out / "iocs.json").write_text(json.dumps(
+        {**header, "iocs": iocs, "attack_ids": attack, "gazetteer_entities": gaz},
+        indent=2, ensure_ascii=False), encoding="utf-8")
+    (out / "entities.json").write_text(json.dumps(
+        {**header, "entities": ents}, indent=2, ensure_ascii=False), encoding="utf-8")
+    return {"iocs": len(iocs), "attack_ids": len(attack),
+            "gazetteer_entities": len(gaz), "entities": len(ents)}
+
+
+def find_images(out: Path, ext: str) -> list:
+    found = []
+    for sub in ("images", "attachments"):
+        base = out / sub
+        if not base.is_dir():
+            continue
+        for p in sorted(base.rglob("*")):
+            if not p.is_file() or p.suffix.lower() not in IMAGE_SUFFIXES:
+                continue
+            if p.name.endswith(".up4x.png"):
+                continue  # our own OCR upscale artifact
+            if ext == ".pdf" and p.parent == out / "images" and p.name.startswith("page"):
+                continue  # our own pdftoppm render, carries no source metadata
+            found.append(p)
+    return found
+
+
+def exif_exiftool(images: list, out: Path) -> dict:
+    result = subprocess.run(["exiftool", "-j", "-n", "-G1", *[str(p) for p in images]],
+                            capture_output=True, text=True, check=False)
+    if not result.stdout.strip():
+        raise RuntimeError(f"exiftool produced no output: {result.stderr.strip()[:300]}")
+    records = json.loads(result.stdout)
+    by_name = {}
+    for rec in records:
+        src = Path(rec.get("SourceFile", ""))
+        key = str(src.relative_to(out)) if src.is_absolute() and out in src.parents else str(src)
+        by_name[key] = rec
+    return by_name
+
+
+def _jsonable(value):
+    if isinstance(value, bytes):
+        return f"<{len(value)} bytes>"
+    if isinstance(value, (int, float, str)) or value is None:
+        return value
+    if isinstance(value, (tuple, list)):
+        return [_jsonable(v) for v in value]
+    return str(value)
+
+
+def exif_pillow(images: list, out: Path) -> dict:
+    from PIL import ExifTags, Image
+    by_name = {}
+    for p in images:
+        key = str(p.relative_to(out))
+        try:
+            with Image.open(p) as img:
+                exif = img.getexif()
+                tags = {ExifTags.TAGS.get(k, str(k)): _jsonable(v) for k, v in exif.items()}
+                gps = exif.get_ifd(0x8825)
+                if gps:
+                    tags["GPSInfo"] = {ExifTags.GPSTAGS.get(k, str(k)): _jsonable(v)
+                                       for k, v in gps.items()}
+                by_name[key] = tags
+        except Exception as exc:  # noqa: BLE001 -- per-image error recorded, not swallowed
+            by_name[key] = {"error": f"{type(exc).__name__}: {exc}"}
+    return by_name
+
+
+def write_exif(out: Path, ext: str) -> dict:
+    images = find_images(out, ext)
+    if not images:
+        return {}
+    if shutil.which("exiftool"):
+        tool, data = "exiftool", exif_exiftool(images, out)
+    else:
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            tool, data = "unavailable", {}
+        else:
+            tool, data = "pillow", exif_pillow(images, out)
+    note = ("exif: unavailable (install exiftool or Pillow)" if tool == "unavailable"
+            else f"exif via {tool}")
+    (out / "exif.json").write_text(json.dumps(
+        {"generator": SIDE_GENERATOR, "tool": tool, "note": note,
+         "images": [str(p.relative_to(out)) for p in images], "exif": data},
+        indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    return {"exif": note if tool == "unavailable" else tool, "exif_images": len(images)}
+
+
+# ---------- optional model NER (--ner) ----------
+
+NER_LABELS = ["person", "organization", "location", "email", "phone number",
+              "crypto wallet", "iban", "passport number", "national id number"]
+NER_CHUNK = 1500
+
+
+def _chunks(text: str, size: int = NER_CHUNK):
+    """Yield (offset, chunk) cut on whitespace near `size` so entities are not split."""
+    pos = 0
+    while pos < len(text):
+        end = min(len(text), pos + size)
+        if end < len(text):
+            cut = text.rfind(" ", pos + size // 2, end)
+            end = cut if cut > pos else end
+        yield pos, text[pos:end]
+        pos = end
+
+
+def ner_gliner(text: str) -> list:
+    from gliner import GLiNER
+    model = GLiNER.from_pretrained(os.environ.get("GLINER_MODEL", "urchade/gliner_multi-v2.1"))
+    found = []
+    for offset, chunk in _chunks(text):
+        for ent in model.predict_entities(chunk, NER_LABELS, threshold=0.5):
+            found.append({"label": ent["label"], "start": offset + ent["start"],
+                          "end": offset + ent["end"], "text": ent["text"],
+                          "score": round(float(ent.get("score", 0.0)), 4)})
+    return found
+
+
+def ner_langextract(text: str) -> list:
+    import langextract as lx
+    key = os.environ.get("LANGEXTRACT_API_KEY") or os.environ.get("GEMINI_API_KEY")
+    examples = [lx.data.ExampleData(
+        text="Wire from John Smith at Acme Holdings Ltd to IBAN GB82WEST12345698765432.",
+        extractions=[
+            lx.data.Extraction(extraction_class="person", extraction_text="John Smith"),
+            lx.data.Extraction(extraction_class="organization",
+                               extraction_text="Acme Holdings Ltd"),
+            lx.data.Extraction(extraction_class="iban",
+                               extraction_text="GB82WEST12345698765432"),
+        ])]
+    result = lx.extract(
+        text_or_documents=text, examples=examples, api_key=key,
+        model_id=os.environ.get("LANGEXTRACT_MODEL", "gemini-2.5-flash"),
+        prompt_description=("Extract people, organizations, locations, emails, phone numbers, "
+                            "crypto wallets, IBANs and passport / national ID numbers verbatim."))
+    found = []
+    for ext in result.extractions or []:
+        interval = getattr(ext, "char_interval", None)
+        if not interval or interval.start_pos is None:
+            continue
+        found.append({"label": ext.extraction_class, "start": interval.start_pos,
+                      "end": interval.end_pos, "text": ext.extraction_text})
+    return found
+
+
+SPACY_PATTERNS = [
+    {"label": "IBAN", "pattern": [{"TEXT": {"REGEX": r"^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$"}}]},
+    {"label": "CRYPTO_WALLET", "pattern": [{"TEXT": {"REGEX": r"^0x[a-fA-F0-9]{40}$"}}]},
+    {"label": "CRYPTO_WALLET",
+     "pattern": [{"TEXT": {"REGEX": r"^(bc1[ac-hj-np-z02-9]{6,87}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})$"}}]},
+    {"label": "CRYPTO_WALLET", "pattern": [{"TEXT": {"REGEX": r"^T[1-9A-HJ-NP-Za-km-z]{33}$"}}]},
+    {"label": "PASSPORT_OR_ID", "pattern": [{"TEXT": {"REGEX": r"^[A-Z]{1,2}\d{6,9}$"}}]},
+    {"label": "PASSPORT_OR_ID", "pattern": [{"LOWER": {"IN": ["passport", "id", "ssn", "nin"]}},
+                                            {"IS_PUNCT": True, "OP": "?"},
+                                            {"TEXT": {"REGEX": r"^[A-Z0-9-]{6,14}$"}}]},
+]
+
+
+def ner_spacy(text: str) -> tuple:
+    import spacy
+    try:
+        nlp = spacy.load("en_core_web_sm")
+        model_note = "en_core_web_sm + EntityRuler"
+        ruler = nlp.add_pipe("entity_ruler", before="ner")
+    except OSError:
+        nlp = spacy.blank("en")
+        model_note = "blank('en') + EntityRuler (en_core_web_sm not installed: no PERSON/ORG)"
+        ruler = nlp.add_pipe("entity_ruler")
+    ruler.add_patterns(SPACY_PATTERNS)
+    found = []
+    for offset, chunk in _chunks(text, 100000):
+        for ent in nlp(chunk).ents:
+            found.append({"label": ent.label_, "start": offset + ent.start_char,
+                          "end": offset + ent.end_char, "text": ent.text})
+    return found, model_note
+
+
+NER_INSTALL = {"gliner": "pip install gliner", "langextract": "pip install langextract",
+               "spacy": "pip install spacy (optional: python -m spacy download en_core_web_sm)"}
+
+
+def _run_ner_backend(backend: str, text: str) -> tuple:
+    if backend == "gliner":
+        return ner_gliner(text), "GLiNER " + os.environ.get("GLINER_MODEL",
+                                                             "urchade/gliner_multi-v2.1")
+    if backend == "langextract":
+        return ner_langextract(text), "langextract (Gemini; text left this machine)"
+    return ner_spacy(text)
+
+
+def write_ner(out: Path, sources: dict, backend: str) -> dict:
+    """Optional NER -> ner.json. Never raises: missing lib / key becomes a status note."""
+    record = {"generator": SIDE_GENERATOR, "backend": backend, "status": "ok", "note": "",
+              "offset_unit": "python str index (code point)", "entities": [],
+              "dropped_misaligned": 0, "evidence_tier": "T3 (model output)"}
+    if backend == "langextract" and not (os.environ.get("LANGEXTRACT_API_KEY")
+                                         or os.environ.get("GEMINI_API_KEY")):
+        record.update(status="skipped",
+                      note="langextract needs LANGEXTRACT_API_KEY or GEMINI_API_KEY")
+    else:
+        try:
+            for name, text in sources.items():
+                found, model_note = _run_ner_backend(backend, text)
+                record["note"] = model_note
+                for ent in found:
+                    if text[ent["start"]:ent["end"]] != ent["text"]:
+                        record["dropped_misaligned"] += 1  # span not verbatim: not citable
+                        continue
+                    record["entities"].append({**ent, "source_file": name})
+        except ImportError as exc:
+            record.update(status="unavailable",
+                          note=f"{backend} not installed ({exc}): {NER_INSTALL[backend]}")
+        except Exception as exc:  # noqa: BLE001 -- model/runtime failure is reported, not fatal
+            record.update(status="error", note=f"{type(exc).__name__}: {exc}")
+    (out / "ner.json").write_text(json.dumps(record, indent=2, ensure_ascii=False),
+                                  encoding="utf-8")
+    if record["status"] != "ok":
+        print(f"  [ner] {out.name}: {record['status']} -- {record['note']}", file=sys.stderr)
+    return {"ner": record["status"], "ner_entities": len(record["entities"])}
+
+
+def write_side_files(out: Path, ext: str, ner_backend: str | None) -> dict:
+    """iocs/entities/exif (+ner). Errors are reported in the manifest and on stderr,
+    never raised: the verbatim extraction already on disk must not be lost."""
+    stats: dict = {}
+    steps = [("iocs/entities", lambda: write_iocs_and_entities(out, read_side_sources(out))),
+             ("exif", lambda: write_exif(out, ext))]
+    if ner_backend:
+        steps.append(("ner", lambda: write_ner(out, read_side_sources(out), ner_backend)))
+    for label, step in steps:
+        try:
+            stats.update(step())
+        except Exception as exc:  # noqa: BLE001 -- recorded + printed, extraction continues
+            stats.setdefault("side_file_errors", []).append(f"{label}: {exc}")
+            print(f"  [warn] {out.name}: {label} side file failed: {exc}", file=sys.stderr)
+    return stats
+
+
 HANDLERS = {
     ".pdf": extract_pdf,
+    ".json": extract_json,
+    ".xlsx": extract_xlsx,
     ".docx": extract_docx,
     ".doc": extract_doc,
     ".csv": extract_csv,
@@ -361,22 +751,8 @@ HANDLERS = {
 
 # ---------- orchestration ----------
 
-def read_active_case() -> str:
-    pointer = WORKSPACE / ".active-case"
-    if not pointer.is_file():
-        return ""
-    return pointer.read_text().strip()
-
-
 def resolve_paths(args):
-    case = args.case or read_active_case()
-    if not case:
-        print("ERROR: no --case given and no .active-case set", file=sys.stderr)
-        sys.exit(1)
-    case_dir = WORKSPACE / "investigations" / case
-    if not case_dir.is_dir():
-        print(f"ERROR: case dir not found: {case_dir}", file=sys.stderr)
-        sys.exit(1)
+    case, case_dir = resolve_case_dir(args.case or "", WORKSPACE)
     intake = Path(args.intake) if args.intake else case_dir / "investigation" / "intake"
     if not intake.is_dir():
         print(f"ERROR: intake dir not found: {intake}", file=sys.stderr)
@@ -390,6 +766,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Extract verbatim text + full OCR from intake files.")
     parser.add_argument("--case", help="case folder name under investigations/")
     parser.add_argument("--intake", help="override intake dir")
+    parser.add_argument("--ner", choices=["gliner", "langextract", "spacy"],
+                        help="optional model NER backend -> ner.json (lazy, never fatal)")
     args = parser.parse_args()
 
     case, intake, extracted = resolve_paths(args)
@@ -411,6 +789,7 @@ def main() -> int:
         out = extracted / src.stem
         try:
             stats = handler(src, out)
+            stats.update(write_side_files(out, src.suffix.lower(), args.ner))
             ocr_kb = (out / "ocr.md").stat().st_size / 1024 if (out / "ocr.md").exists() else 0
             stats.update({"file": src.name, "ext": src.suffix.lower(),
                           "ocr_bytes": int(ocr_kb * 1024), "status": "OK",

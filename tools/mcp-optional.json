@@ -1,0 +1,68 @@
+{
+  "_README": "OPTIONAL MCP servers. NOT loaded: this file is not .mcp.json. To enable one, copy its block into .mcp.json under mcpServers, drop the leading underscore from the name and the _meta key, and set its env vars in your shell (never inline secrets). Package names and versions verified 2026-10-10 against npm / PyPI / the repo README; entries marked verified=false could not be confirmed and must not be enabled until they are. Every tool result is T3 until crosslinked (.claude/rules/q-investigation.md).",
+  "mcpServers": {
+    "_companies-house": {
+      "_meta": {
+        "verified": true,
+        "evidence": "npm companies-house-mcp@4.0.1, repo github.com/aicayzer/companies-house-mcp (MIT)",
+        "what": "UK Companies House: company search, profile, officers, PSCs, filing history",
+        "key": "COMPANIES_HOUSE_API_KEY (free, developer.company-information.service.gov.uk)"
+      },
+      "command": "npx",
+      "args": ["-y", "companies-house-mcp@4.0.1"],
+      "env": {"COMPANIES_HOUSE_API_KEY": "${COMPANIES_HOUSE_API_KEY}"}
+    },
+    "_us-secretary-of-state": {
+      "_meta": {
+        "verified": false,
+        "evidence": "No MCP server for US Secretary of State business registries found on npm or PyPI (searched 2026-10-10). Cobalt Intelligence publishes an SoS API SDK (npm cobalt-int-sdk, not MCP).",
+        "alternatives": [
+          "OpenCorporates covers US state registries: npm @pipeworx/mcp-open-corporates@0.1.2 exists, but it routes calls through gateway.pipeworx.io and takes the API key as a per-call tool argument (_apiKey). Not recommended for case data.",
+          "Keyless: osint-tool.py gleif / opencorporates adapters, or /q-corp (SEC EDGAR, Form D)."
+        ]
+      }
+    },
+    "_openosint": {
+      "_meta": {
+        "verified": true,
+        "evidence": "PyPI openosint 2.33.1, repo github.com/OpenOSINT/OpenOSINT (MIT), MCP registry io.github.OpenOSINT/openosint",
+        "what": "21+ OSINT tools (email, username, domain recon). Passive tools only by default; do NOT add --allow-active without founder approval (active tools touch target infrastructure).",
+        "key": "optional SHODAN_API_KEY, HIBP_API_KEY"
+      },
+      "command": "uvx",
+      "args": ["--from", "openosint==2.33.1", "openosint-mcp"],
+      "env": {"OPENOSINT_MAX_TOOL_CALLS": "15"}
+    },
+    "_world-intel": {
+      "_meta": {
+        "verified": true,
+        "evidence": "repo github.com/marc-shade/world-intel-mcp (MIT); NOT on PyPI, install from a git checkout: git clone https://github.com/marc-shade/world-intel-mcp && pip install -e world-intel-mcp",
+        "what": "132 tools across 30+ public-data domains (conflict, sanctions, aviation, maritime, markets)",
+        "key": "none for core"
+      },
+      "command": "world-intel-mcp",
+      "args": []
+    },
+    "_user-scanner": {
+      "_meta": {
+        "verified": true,
+        "evidence": "PyPI user-scanner 1.5.2.1 (extra [mcp]), repo github.com/kaifcodec/user-scanner",
+        "what": "username / email presence across sites, with pivots",
+        "key": "none"
+      },
+      "command": "uvx",
+      "args": ["--from", "user-scanner[mcp]==1.5.2.1", "user-scanner-mcp"]
+    },
+    "_maigret": {
+      "_meta": {
+        "verified": true,
+        "evidence": "npm mcp-maigret@1.0.17, repo github.com/w0h1v/mcp-maigret (MIT); runs maigret in Docker (image soxoj/maigret)",
+        "what": "username search across thousands of sites; saved reports",
+        "key": "none; needs Docker running"
+      },
+      "command": "npx",
+      "args": ["-y", "mcp-maigret@1.0.17"],
+      "env": {"MAIGRET_REPORTS_DIR": "${HOME}/maigret-reports"}
+    }
+  }
+}
