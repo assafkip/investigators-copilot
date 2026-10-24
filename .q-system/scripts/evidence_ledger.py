@@ -49,7 +49,7 @@ NUM_RE = re.compile(r"(?<![\w.$])(\d[\d,]*\.?\d*)(?![\w])")
 MIN_SIGNIFICANT_DIGITS = 2
 
 # A date is not a measurement a client acts on, and treating it as one made the gate
-# unusable (sp-f551ef30, ASK-232): `zach-info-request.md` blocked on ['13','2026'],
+# unusable (sp-f551ef30, ASK-232): `client-info-request.md` blocked on ['13','2026'],
 # both of which fell out of a date. The only ways past that are to invent ledger rows
 # for calendar facts or to bypass the gate -- each worse than the gate not firing.
 #

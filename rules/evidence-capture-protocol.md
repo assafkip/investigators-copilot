@@ -51,7 +51,7 @@ If step 4 or 5 fails, the item is marked `INCOMPLETE` in `source.json` and the s
 
 ## SCREENSHOT_ONLY evidence class
 
-For client-provided evidence where the original URL is lost (e.g., the Sowell PDF the client gave us on 2026-04-09), use this structure:
+For client-provided evidence where the original URL is lost (e.g., the PDF the client gave us on 2026-04-09), use this structure:
 
 ```
 items/EV-NNNN-<slug>/

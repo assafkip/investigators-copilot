@@ -80,7 +80,7 @@ def norm_dob(raw):
 def dob_month_day_matches(raw, target_dob):
     """True if raw's month/day matches target_dob's month/day, regardless of
     year (catches anomalous-year data-entry artifacts, e.g. year 1904 or 2099
-    with the right month/day -- seen in the Goodgame origin case)."""
+    with the right month/day -- seen in the origin case)."""
     dob = norm_dob(raw)
     if not dob:
         return False
