@@ -1,15 +1,53 @@
-# Investigators Copilot
+# Investigators Copilot: free open-source OSINT and investigation toolkit for Claude Code
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-plugin-orange)](https://claude.com/claude-code)
 [![GitHub stars](https://img.shields.io/github/stars/assafkip/investigators-copilot?style=social)](https://github.com/assafkip/investigators-copilot)
 [![Topics](https://img.shields.io/badge/topics-osint%20%7C%20threat--intel%20%7C%20investigation-brightgreen)](https://github.com/topics/osint)
 
-Investigation toolkit for [Claude Code](https://claude.com/claude-code). Case management, OSINT, structured analytic techniques, chain-of-custody evidence capture, and bundled MCP servers for infrastructure recon and threat intel.
+Investigators Copilot is a free, MIT-licensed [Claude Code](https://claude.com/claude-code) plugin for OSINT and investigations. It gives Claude a case workflow, 54 OSINT enrichment adapters, 24 slash commands, structured analytic techniques (analysis of competing hypotheses, key assumptions check, premortem), chain-of-custody evidence capture, and two bundled threat-intel MCP servers.
 
-Not just a scraper wrapper. A full investigation workflow — from case intake to evidence-grade dossier.
+It is built from a working investigation practice. These are the same commands, skills and rules that run real cases, published with client data removed.
+
+Not just a scraper wrapper. A full investigation workflow, from case intake to evidence-grade dossier.
+
+## Quick facts
+
+- **License:** MIT (the `structured-analysis` skill is Apache 2.0)
+- **Runs in:** Claude Code, installed as a plugin
+- **Version:** 0.4.0 (2026-10-24)
+- **Commands:** 24 `/q-*` slash commands for case management, collection, analysis and reporting
+- **OSINT adapters:** 54, listed by `skills/osint/scripts/osint-tool.py --list`
+- **Evidence:** every captured URL becomes an `EV-NNNN` folder with a PDF, a PNG, a SHA-256 hash and chain-of-custody notes
+- **Left out on purpose:** automated face search
 
 **Use it for:** OSINT, due diligence, threat intelligence, incident response, digital forensics, journalistic research, competitive intel, security research, CTF challenges.
+
+## Common questions
+
+### What is Investigators Copilot?
+
+A Claude Code plugin that turns Claude into an investigation assistant. It runs a case from scope to report: collect, cross-reference, analyze, challenge your own conclusions, and export a dossier where every claim cites its evidence.
+
+### How do I install it?
+
+In Claude Code, run `/plugin install assafkip/investigators-copilot`. Or clone `https://github.com/assafkip/investigators-copilot.git`. See [Install](#install) and [MCP server setup](#mcp-server-setup).
+
+### How do I run my first OSINT investigation with Claude Code?
+
+Run `/q-new-case`, then `/q-scope` to set the question and targets, then `/q-begin`, then `/q-osint` or `/q-collect` on a domain, person or account. The full command sequence is under [Typical workflow](#typical-workflow).
+
+### What sources does it cover?
+
+Domain and DNS records, certificate transparency logs, RDAP and WHOIS, company registries, sanctions lists, on-chain wallet lookups, username and email identity checks, Reddit history, and Telegram channels through an optional skill. `osint-tool.py --list` shows which adapters are ready, which need an API key and which need a local tool. Each result carries an evidence tier (T1 for records, T3 for tool output that needs a crosslink).
+
+### Does it invent findings?
+
+It is built not to. Every claim gets an A-F source reliability grade. Tool output stays a lead until it is crosslinked, and an account attribution needs two independent T1 or T2 crosslinks. A hook blocks a confirmed finding that cites an identifier still marked unverified.
+
+### Is it legal to use?
+
+It works on public sources and is meant for authorized work. Read [Ethics](#ethics) first. You are responsible for local law and platform terms.
 
 ## How it works
 
