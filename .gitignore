@@ -37,6 +37,8 @@ output/
 !templates/new-investigation/investigation/evidence/
 !templates/new-investigation/output/
 *.docx
+# ...except the blank sample report the template ships
+!templates/report-template/*.docx
 *.pdf
 
 # OS
