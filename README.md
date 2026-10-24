@@ -1,8 +1,8 @@
-# huntkit
+# Investigators Copilot
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-plugin-orange)](https://claude.com/claude-code)
-[![GitHub stars](https://img.shields.io/github/stars/assafkip/huntkit?style=social)](https://github.com/assafkip/huntkit)
+[![GitHub stars](https://img.shields.io/github/stars/assafkip/investigators-copilot?style=social)](https://github.com/assafkip/investigators-copilot)
 [![Topics](https://img.shields.io/badge/topics-osint%20%7C%20threat--intel%20%7C%20investigation-brightgreen)](https://github.com/topics/osint)
 
 Investigation toolkit for [Claude Code](https://claude.com/claude-code). Case management, OSINT, structured analytic techniques, chain-of-custody evidence capture, and bundled MCP servers for infrastructure recon and threat intel.
@@ -66,14 +66,14 @@ graph TB
         CC[/Claude Code session/]
     end
 
-    subgraph huntkit[huntkit plugin]
+    subgraph copilot[Investigators Copilot plugin]
         direction TB
         subgraph Skills
             OSINT_S[osint<br/>6-phase workflow]
             SA_S[structured-analysis<br/>Heuer's ACH + tradecraft primer]
         end
 
-        subgraph Commands[22 commands]
+        subgraph Commands[24 commands]
             CM[case mgmt]
             CL[collection]
             AN[analysis]
@@ -111,10 +111,10 @@ graph TB
         EVD[(investigations/case/<br/>evidence/ findings/<br/>targets/ timelines/)]
     end
 
-    CC --> huntkit
-    huntkit --> MCP
-    huntkit --> External
-    huntkit --> Case
+    CC --> copilot
+    copilot --> MCP
+    copilot --> External
+    copilot --> Case
     Rules -.enforces.-> Commands
     Commands -.uses.-> Skills
 
@@ -128,9 +128,10 @@ graph TB
 ### Skills
 
 - **`osint`** — 6-phase investigation: tooling check → seed collection → optional internal intel → platform extraction → cross-reference → psychoprofile → completeness scoring → dossier.
+- **`telegram-harvest`**, **`geo-sleuth`**, **`verification`**, **`leak-record-classifier`** - Telegram channel harvest, geolocation, source verification, and leaked-records CSV classification.
 - **`structured-analysis`** — CIA tradecraft primer library (Heuer's ACH, key assumptions check, quality of information check, red team, premortem, 66-technique taxonomy). Apache 2.0, upstream [Blevene/structured-analysis-skill](https://github.com/Blevene/structured-analysis-skill).
 
-### Commands (22)
+### Commands (24)
 
 **Case management:** `/q-new-case`, `/q-scope`, `/q-begin`, `/q-status`, `/q-checkpoint`, `/q-handoff`, `/q-end`
 
@@ -140,19 +141,32 @@ graph TB
 
 **Reporting:** `/q-brief`, `/q-debrief`, `/q-export`
 
-**Specialized:** `/q-sec-stack` (SaaS security stack intel)
+**Specialized:** `/q-sec-stack` (SaaS security stack intel), `/q-corp` (public-records sweep), `/q-watch` (monitor URLs for changes)
+
+### Not included
+
+Two things are deliberately left out of this kit. The automated face-search pipeline (`face-search.py`, `/q-face`) is dual-use. TGSpyder is third-party code with its own license; `telegram-harvest` takes its location from `TGSPYDER_SRC`.
 
 ### MCP servers (bundled)
 
 - **`osint-infra`** — WHOIS, DNS, reverse DNS, Wayback snapshots / fetch.
 - **`threat-intel`** — VirusTotal, URLhaus, ThreatFox, crt.sh certificate transparency.
 
+### Agent
+
+- **`ryan`** - the investigation analyst. Owns collection, structured analysis, evidence tiering and gate compliance for an active case.
+
+### Enrichment adapters
+
+`skills/osint/scripts/osint-tool.py --list` prints 54 adapters (CT logs, RDAP, DoH, registries, sanctions, on-chain, identity). Each result carries an evidence tier: T1 for records, T3 for tool output that needs a crosslink.
+
 ### Rules (enforced)
 
 - **`evidence-capture-protocol`** — every URL routes through `capture-evidence.sh` (Wayback + archive.today + Chrome PDF + SHA-256 + metadata). Atomic `EV-NNNN-<slug>/` folders. Reports cite by ID.
 - **`q-investigation`** — fail-stop on errors, token discipline, state-vs-session file authority, source reliability A-F scale.
 - **`token-discipline`** — stop conditions, retry limits.
-- **`sycophancy`** — anti-RLHF drift, decision origin tagging.
+- **`sycophancy-core`** — anti-RLHF drift, decision origin tagging.
+- **`investigation-claims-ledger`** — derived claims trace to a command that was run (`resolve-deliverable.py`, `evidence_ledger.py`).
 
 ### Templates
 
@@ -163,13 +177,13 @@ graph TB
 
 ```bash
 # In Claude Code
-/plugin install assafkip/huntkit
+/plugin install assafkip/investigators-copilot
 ```
 
 Or clone:
 
 ```bash
-git clone https://github.com/assafkip/huntkit.git
+git clone https://github.com/assafkip/investigators-copilot.git
 ```
 
 ## MCP server setup
@@ -252,7 +266,7 @@ Do not use on private individuals without consent, for harassment, doxxing, or s
 
 ## Provenance & sync
 
-huntkit is built from a live investigation practice. The commands, skills, and
+investigators-copilot is built from a live investigation practice. The commands, skills, and
 rules here are the same files running real cases daily, synced automatically on
 every upstream change through a build script that anonymizes case references
 and gates the publish behind a client-indicator blocklist plus a gitleaks

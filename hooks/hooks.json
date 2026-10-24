@@ -21,6 +21,16 @@
             "command": "test -f \"${CLAUDE_PLUGIN_ROOT}/skills/osint/scripts/findings-verify-hook.py\" && python3 \"${CLAUDE_PLUGIN_ROOT}/skills/osint/scripts/findings-verify-hook.py\""
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "test -f \"${CLAUDE_PLUGIN_ROOT}/skills/osint/scripts/evidence-pipeline-guard.py\" && python3 \"${CLAUDE_PLUGIN_ROOT}/skills/osint/scripts/evidence-pipeline-guard.py\"",
+            "timeout": 5
+          }
+        ]
       }
     ]
   }
