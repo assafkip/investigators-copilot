@@ -15,7 +15,7 @@ import active_case  # noqa: E402
 def tree(tmp_path):
     ws = tmp_path / "workspace"
     (ws / "investigations" / "case-001-example").mkdir(parents=True)
-    ext = tmp_path / "infohawk" / "007-b"
+    ext = tmp_path / "external-leads" / "007-b"
     ext.mkdir(parents=True)
     return ws, ext
 
@@ -41,12 +41,12 @@ def test_absolute_path_outside_investigations(tree):
 
 def test_relative_path_from_cwd(tree):
     ws, ext = tree
-    assert sh_resolve(ws, "infohawk/007-b", ext.parent.parent) == (0, f"007-b\t{ext.resolve()}")
+    assert sh_resolve(ws, "external-leads/007-b", ext.parent.parent) == (0, f"007-b\t{ext.resolve()}")
 
 
 def test_missing_path_still_fails(tree):
     ws, _ = tree
-    code, _ = sh_resolve(ws, "infohawk/nope", ws.parent)
+    code, _ = sh_resolve(ws, "external-leads/nope", ws.parent)
     assert code == 1
     with pytest.raises(SystemExit):
         active_case.resolve_case_dir("no-such-case", ws)
@@ -72,7 +72,7 @@ def test_ingest_into_case_outside_investigations(tmp_path):
     # Codex P1 on PR #5: the nested next-ev-id.sh call must get the case folder
     # path, not its bare name, or it resolves under investigations/ and fails.
     dst = _copy_scripts(tmp_path)
-    ext = tmp_path / "infohawk" / "007-b"
+    ext = tmp_path / "external-leads" / "007-b"
     ext.mkdir(parents=True)
     doc = tmp_path / "doc.txt"
     doc.write_text("hello")

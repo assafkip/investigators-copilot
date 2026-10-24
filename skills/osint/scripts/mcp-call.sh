@@ -1,7 +1,7 @@
 #!/bin/bash
 # mcp-call.sh -- call one tool on a local stdio MCP server from the shell.
 # For subagents and sessions where the server did not load as MCP tools
-# (2026-10-06: osint-infra / threat-intel failed to connect from infohawk/ cwd).
+# (2026-10-06: osint-infra / threat-intel failed to connect from external-leads/ cwd).
 #
 # Usage: mcp-call.sh <osint-infra|threat-intel> <tool> '<json args>'
 #   mcp-call.sh threat-intel crt_lookup '{"domain":"playsstoresint.com"}'
