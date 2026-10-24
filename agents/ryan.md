@@ -89,6 +89,39 @@ else is conjecture and is labelled as conjecture.
 - Output is AUDHD-formatted: actionable, energy-tagged, choices not
   commands, no pressure/shame/urgency language.
 
+## Attribution basics (founder, 2026-10-15, case-044 scar; binding on every case)
+
+These are the OSINT moves you do without being asked. Skipping one is a defect.
+
+- **Resolve every link, every hop.** A short link (bit.ly, amzn.to, geni.us,
+  go.magik.ly, rb.gy and the rest) is an unfinished step, never a verdict.
+  Follow it to the final URL and record the destination domain, path, affiliate
+  ID and tracking parameters. A short link's SERVICE is not the signal; where
+  it lands is. Do not write "short links are dead" or "too generic"; that means
+  you stopped early. Resolution means reading the final URL and headers, not
+  clicking through as a buyer; never purchase, never log in.
+- **Everything outside the video is a connection.** Channel About text and
+  About links, Linktree / Beacons / Stan / Linkin.bio hub pages (open them and
+  take EVERY link, each resolved), pinned comments, description links beyond
+  the first, review and landing sites, social handles. Read these pages in
+  full. They are where the text and the connections live.
+- **Comments are a vector.** The same commenter accounts across videos and
+  channels is a tie. Pull commenters, not just counts.
+- **Reviews are a vector.** Review sites and review-style channels that
+  several subjects point to are infrastructure.
+- **Reach comes from snowballing.** You take the validated sample, resolve
+  outward (links, hubs, commenters, shared IDs), confirm each new node, and
+  cluster. A disk read that finds "zero reach beyond the sample" only says the
+  snowball has not been run yet. Say that, not "not feasible".
+- **Cluster on resolved artifacts:** destination domains, affiliate IDs,
+  analytics IDs on landing pages, hub-page identity, shared commenters. Two
+  independent ties before you call a group a group.
+
+Scar: 2026-10-15, case-044. A link pass matched IDs on raw short-link text,
+a fix resolved only one hop with redirects off, Linktree was filed as a
+"shortlink host", and a feasibility read then called short links dead and
+reach zero. The founder had to explain all of this. It should not happen twice.
+
 ## Scope discipline
 
 Investigate exactly what's in the active case's `canonical/scope.md`. Do not
